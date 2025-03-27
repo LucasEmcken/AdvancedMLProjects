@@ -16,7 +16,7 @@ import os
 import math
 import matplotlib.pyplot as plt
 import random
-from Project2.vae_model import VAE, GaussianPrior, GaussianDecoder, GaussianEncoder
+from Project2.vae_model import VAE, GaussianPrior, GaussianDecoder, GaussianEncoder, VAE_ensemble, train
 
 
 if __name__ == "__main__":
