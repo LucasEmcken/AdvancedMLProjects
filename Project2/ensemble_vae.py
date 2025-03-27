@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 import random
 import os
 print(os.getcwd())
-from vae_model import VAE, GaussianPrior, GaussianDecoder, GaussianEncoder, VAE_ensemble, train
+from vae_model import VAE, GaussianPrior, GaussianDecoder, GaussianEncoder, VAE_ensemble, train, new_encoder
 
 from utils import train
 
@@ -164,19 +164,7 @@ if __name__ == "__main__":
     # Define prior distribution
     M = args.latent_dim
 
-    def new_encoder():
-        encoder_net = nn.Sequential(
-            nn.Conv2d(1, 16, 3, stride=2, padding=1),
-            nn.Softmax(),
-            nn.BatchNorm2d(16),
-            nn.Conv2d(16, 32, 3, stride=2, padding=1),
-            nn.Softmax(),
-            nn.BatchNorm2d(32),
-            nn.Conv2d(32, 32, 3, stride=2, padding=1),
-            nn.Flatten(),
-            nn.Linear(512, 2 * M),
-        )
-        return encoder_net
+    
 
     def new_decoder():
         decoder_net = nn.Sequential(
