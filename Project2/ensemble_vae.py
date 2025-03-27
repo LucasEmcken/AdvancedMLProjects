@@ -17,7 +17,7 @@ import math
 import matplotlib.pyplot as plt
 import random
 
-from classes import GaussianDecoder, GaussianEncoder, GaussianPrior, VAE, VAE_ensemble
+from Project2.vae_model import VAE, GaussianPrior, GaussianDecoder, GaussianEncoder, VAE_ensemble, train
 
 from utils import train
 
