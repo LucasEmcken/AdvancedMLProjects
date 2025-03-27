@@ -16,8 +16,9 @@ import os
 import math
 import matplotlib.pyplot as plt
 import random
-
-from Project2.vae_model import VAE, GaussianPrior, GaussianDecoder, GaussianEncoder, VAE_ensemble, train
+import os
+print(os.getcwd())
+from vae_model import VAE, GaussianPrior, GaussianDecoder, GaussianEncoder, VAE_ensemble, train
 
 from utils import train
 
@@ -247,7 +248,7 @@ if __name__ == "__main__":
         plt.legend(handles=legend_handles, title="Classes")
         # Labels and title
         plt.title("Ensamble")
-        plt.savefig("plot_ensamble_test.png", dpi=300, bbox_inches="tight")
+        plt.savefig("Project2/plots/sample_ensamble_3_1.png", dpi=300, bbox_inches="tight")
     
     if args.mode == "trainEnsamble":
         # Number of decoders in the ensemble
@@ -270,7 +271,7 @@ if __name__ == "__main__":
         os.makedirs(f"{experiments_folder}", exist_ok=True)
         torch.save(
             model.state_dict(),
-            f"{experiments_folder}/model_3_1.pt",
+            f"{experiments_folder}/model_3_10.pt",
         )
 
     if args.mode == "train":
@@ -372,7 +373,6 @@ if __name__ == "__main__":
     elif args.mode == "PartB":
 
         print("Hello")
-
 
     elif args.mode == "eval":
         # Load trained model
