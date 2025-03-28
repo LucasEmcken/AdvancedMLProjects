@@ -88,6 +88,39 @@ class GaussianEncoder(nn.Module):
         mean, std = torch.chunk(self.encoder_net(x), 2, dim=-1)
         return td.Independent(td.Normal(loc=mean, scale=torch.exp(std)), 1)
 
+"""
+class GaussianDecoder(nn.Module):
+    def __init__(self, decoder_net):
+        
+        Define a Bernoulli decoder distribution based on a given decoder network.
+
+        Parameters:
+        encoder_net: [torch.nn.Module]
+           The decoder network that takes as a tensor of dim `(batch_size, M) as
+           input, where M is the dimension of the latent space, and outputs a
+           tensor of dimension (batch_size, feature_dim1, feature_dim2).
+        
+        super(GaussianDecoder, self).__init__()
+        self.decoder_net = decoder_net
+        self.std = nn.Parameter(torch.ones(28, 28) * 0.5, requires_grad=True) # In case you want to learn the std of the gaussian.
+
+    def forward(self, z):
+        
+        Given a batch of latent variables, return a Bernoulli distribution over the data space.
+
+        Parameters:
+        z: [torch.Tensor]
+           A tensor of dimension `(batch_size, M)`, where M is the dimension of the latent space.
+        
+        # Expand the learned std to match the output shape
+        means = self.decoder_net(z)
+        #print("mena shape",means.shape)
+        std = self.std.unsqueeze(0)  # Add batch and channel dimensions
+        std = std.expand(means.size(0), means.size(1), *std.shape[1:])  # Expand to match output shape
+        #print("std shape",std.shape)
+        # Return the Gaussian distribution with learned mean and std
+        return td.Independent(td.Normal(loc=means, scale=std), 3)
+"""
 
 class GaussianDecoder(nn.Module):
     def __init__(self, decoder_net):
@@ -102,7 +135,7 @@ class GaussianDecoder(nn.Module):
         """
         super(GaussianDecoder, self).__init__()
         self.decoder_net = decoder_net
-        # self.std = nn.Parameter(torch.ones(28, 28) * 0.5, requires_grad=True) # In case you want to learn the std of the gaussian.
+        #self.std = nn.Parameter(torch.ones(28, 28) * 0.5, requires_grad=True) # In case you want to learn the std of the gaussian.
 
     def forward(self, z):
         """
@@ -112,7 +145,13 @@ class GaussianDecoder(nn.Module):
         z: [torch.Tensor]
            A tensor of dimension `(batch_size, M)`, where M is the dimension of the latent space.
         """
+        # Expand the learned std to match the output shape
         means = self.decoder_net(z)
+        #print("mena shape",means.shape)
+        #std = self.std.unsqueeze(0)  # Add batch and channel dimensions
+        #std = std.expand(means.size(0), means.size(1), *std.shape[1:])  # Expand to match output shape
+        #print("std shape",std.shape)
+        # Return the Gaussian distribution with learned mean and std
         return td.Independent(td.Normal(loc=means, scale=1e-1), 3)
 
 
@@ -260,29 +299,38 @@ def train(model, optimizer, data_loader, epochs, device):
         eps = std * torch.randn_like(x)
         return torch.clamp(x + eps, min=0.0, max=1.0)
 
+    losses = []
+
     with tqdm(range(num_steps)) as pbar:
         for step in pbar:
             try:
                 x = next(iter(data_loader))[0]
                 x = noise(x.to(device))
-                model = model
                 optimizer.zero_grad()
-                # from IPython import embed; embed()
                 loss = model(x)
                 loss.backward()
                 optimizer.step()
 
+                # Store loss for plotting
+                losses.append(loss.item())
+
                 # Report
                 if step % 5 == 0:
                     loss = loss.detach().cpu()
-                    pbar.set_description(
-                        f"total epochs ={epoch}, step={step}, loss={loss:.1f}"
-                    )
+                    pbar.set_description(f"total epochs ={epoch}, step={step}, loss={loss:.1f}")
 
                 if (step + 1) % len(data_loader) == 0:
                     epoch += 1
             except KeyboardInterrupt:
-                print(
-                    f"Stopping training at total epoch {epoch} and current loss: {loss:.1f}"
-                )
+                print(f"Stopping training at total epoch {epoch} and current loss: {loss:.1f}")
                 break
+
+    # Plot loss curve
+    plt.figure(figsize=(10, 5))
+    plt.plot(losses, label="Loss")
+    plt.xlabel("Steps")
+    plt.ylabel("Loss")
+    plt.title("Training Loss Curve")
+    plt.ylim(-800, 1000)
+    plt.legend()
+    plt.savefig("Project2/plots/Training_loss.png")
