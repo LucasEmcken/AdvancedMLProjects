@@ -160,7 +160,7 @@ class VAE_ensemble(nn.Module):
     Variational Autoencoder (VAE) with an ensemble of decoders.
     """
 
-    def __init__(self, prior, decoders, encoder,num_decoder):
+    def __init__(self, prior, decoders, encoder):
         """
         Parameters:
         prior: [torch.nn.Module]
@@ -174,7 +174,7 @@ class VAE_ensemble(nn.Module):
         self.prior = prior
         self.decoders = nn.ModuleList(decoders)  # Store decoders in a ModuleList
         self.encoder = encoder
-        self.num_decoder = num_decoder
+        self.num_decoder = len(decoders)
 
     def elbo(self, x):
         """
@@ -275,7 +275,7 @@ class VAE(nn.Module):
         return -self.elbo(x)
 
 
-def train(model, optimizer, data_loader, epochs, device):
+def train(model, optimizer, data_loader, epochs, device, plot_path=False):
     """
     Train a VAE model.
 
@@ -326,11 +326,12 @@ def train(model, optimizer, data_loader, epochs, device):
                 break
 
     # Plot loss curve
-    plt.figure(figsize=(10, 5))
-    plt.plot(losses, label="Loss")
-    plt.xlabel("Steps")
-    plt.ylabel("Loss")
-    plt.title("Training Loss Curve")
-    plt.ylim(-800, 1000)
-    plt.legend()
-    plt.savefig("Project2/plots/Training_loss.png")
+    if plot_path != False:
+        plt.figure(figsize=(10, 5))
+        plt.plot(losses, label="Loss")
+        plt.xlabel("Steps")
+        plt.ylabel("Loss")
+        plt.title("Training Loss Curve")
+        plt.ylim(-800, 1000)
+        plt.legend()
+        plt.savefig(plot_path)
