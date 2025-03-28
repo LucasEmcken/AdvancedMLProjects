@@ -97,6 +97,12 @@ if __name__ == "__main__":
         help="number of decoders in the ensemble (default: %(default)s)",
     )
     parser.add_argument(
+        "--model-nr",
+        type=int,
+        default=1,
+        help="Model number to load/train (default: %(default)s)",
+    )
+    parser.add_argument(
         "--num-reruns",
         type=int,
         default=10,
@@ -166,7 +172,8 @@ if __name__ == "__main__":
 
     # Choose mode to run
     if args.mode == "TestEnsamble":
-        num_decoders=3
+        num_decoders= args.num_decoders
+        num_model = args.model_nr
         model = VAE_ensemble(
             GaussianPrior(M),
             [GaussianDecoder(new_decoder(M=M)) for _ in range(num_decoders)],  # Create an ensemble of decoders
@@ -176,7 +183,7 @@ if __name__ == "__main__":
         import seaborn as sns
         from scipy.stats import gaussian_kde
         import numpy as np
-        model.load_state_dict(torch.load(args.experiment_folder + "/model_3_1.pt"))
+        model.load_state_dict(torch.load(args.experiment_folder + "/model_"+num_decoders+"_"+num_model+".pt"))
         model.eval()
         
         data_iter = iter(mnist_train_loader)
@@ -222,7 +229,8 @@ if __name__ == "__main__":
     
     if args.mode == "trainEnsamble":
         # Number of decoders in the ensemble
-        num_decoders = 3  
+        num_decoders = args.num_decoders
+        num_model = args.model_nr
         experiments_folder = args.experiment_folder
         # Initialize the model
         model = VAE_ensemble(
@@ -241,7 +249,7 @@ if __name__ == "__main__":
         os.makedirs(f"{experiments_folder}", exist_ok=True)
         torch.save(
             model.state_dict(),
-            f"{experiments_folder}/model_3_10.pt",
+            f"{experiments_folder}/model_"+num_decoders+"_"+num_model+".pt",
         )
 
     if args.mode == "train":
