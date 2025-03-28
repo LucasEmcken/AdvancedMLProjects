@@ -51,7 +51,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--experiment-folder",
         type=str,
-        default="Project2/models",
+        default="./models",
         help="folder to save and load experiment results in (default: %(default)s)",
     )
     parser.add_argument(
@@ -250,8 +250,9 @@ if __name__ == "__main__":
         os.makedirs(f"{experiments_folder}", exist_ok=True)
         torch.save(
             model.state_dict(),
-            f"{experiments_folder}/model_"+num_decoders+"_"+num_model+".pt",
+            f"{experiments_folder}/model_"+str(num_decoders)+"_"+str(num_model)+".pt",
         )
+        print(f"saved model to {experiments_folder}/model_"+str(num_decoders)+"_"+str(num_model)+".pt")
 
     if args.mode == "train":
 
