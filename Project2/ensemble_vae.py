@@ -51,7 +51,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--experiment-folder",
         type=str,
-        default="experiment",
+        default="Project2/models",
         help="folder to save and load experiment results in (default: %(default)s)",
     )
     parser.add_argument(
