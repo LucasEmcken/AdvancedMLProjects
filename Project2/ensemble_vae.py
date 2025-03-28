@@ -17,10 +17,8 @@ import math
 import matplotlib.pyplot as plt
 import random
 import os
-print(os.getcwd())
-from vae_model import VAE, GaussianPrior, GaussianDecoder, GaussianEncoder, VAE_ensemble, train, new_encoder, new_decoder
 
-from utils import train
+from vae_model import VAE, GaussianPrior, GaussianDecoder, GaussianEncoder, VAE_ensemble, train, new_encoder, new_decoder
 
 if __name__ == "__main__":
     from torchvision import datasets, transforms
@@ -28,17 +26,19 @@ if __name__ == "__main__":
 
     # Parse arguments
     import argparse
-    # python3 Project2/ensemble_vae.py train --device cpu --latent-dim 2 --epochs 50 --batch-size 64 --experiment-folder Project2/models
+    # python3 Project2/ensemble_vae.py train --device cpu --latent-dim 2 --epochs 100 --batch-size 64 --experiment-folder Project2/models
 
     # python3 Project2/ensemble_vae.py geodesics --device cpu --latent-dim 2 --epochs 50 --batch-size 64 --experiment-folder Project2/models
 
     # python3 Project2/ensemble_vae.py TestEnsamble --device cpu --latent-dim 2 --epochs 50 --batch-size 64 --experiment-folder Project2/models
 
-    # python3 ensemble_vae.py testing --device cpu --latent-dim 2 --epochs 50 --batch-size 64 --experiment-folder models
+    # python3 Project2/ensemble_vae.py sample --device cpu --latent-dim 2 --epochs 100 --batch-size 64 --experiment-folder Project2/models
+
+    # python3 Project2/ensemble_vae.py testing --device cpu --latent-dim 2 --epochs 100 --batch-size 64 --experiment-folder Project2/models
 
     # python3 ensemble_vae.py sample --device cpu --latent-dim 2 --epochs 50 --batch-size 64 --experiment-folder models
 
-    # python3 Project2/ensemble_vae.py trainEnsamble --device cpu --latent-dim 2 --epochs 50 --batch-size 64 --experiment-folder Project2/models
+    # python3 Project2/ensemble_vae.py trainEnsamble --device cpu --latent-dim 2 --epochs 100 --batch-size 64 --experiment-folder Project2/models
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -177,7 +177,8 @@ if __name__ == "__main__":
         model = VAE_ensemble(
             GaussianPrior(M),
             [GaussianDecoder(new_decoder(M=M)) for _ in range(num_decoders)],  # Create an ensemble of decoders
-            GaussianEncoder(new_encoder(M=M))
+            GaussianEncoder(new_encoder(M=M)),
+            num_decoders
         ).to(device)
         from scipy.stats import multivariate_normal
         import seaborn as sns
@@ -294,6 +295,7 @@ if __name__ == "__main__":
             save_image(
                 torch.cat([data.cpu(), recon.cpu()], dim=0), "reconstruction_means.png"
             )
+
     elif args.mode == "testing":
         model = VAE(
             GaussianPrior(M),
@@ -304,14 +306,17 @@ if __name__ == "__main__":
         import seaborn as sns
         from scipy.stats import gaussian_kde
         import numpy as np
+        #_________Load Model _________________
         model.load_state_dict(torch.load(args.experiment_folder + "/model.pt"))
         model.eval()
         
+        #_______Import data______________-
         data_iter = iter(mnist_train_loader)
         
+        #___________Get latent space points_____________________
         point_list = []
         target = []
-        for i in range(30):
+        for i in range(32):
             x, y = next(data_iter)
             x = x.to(device)
             q = model.encoder(x)
@@ -320,18 +325,40 @@ if __name__ == "__main__":
             
             point_list.append(z)  # Keep as tensor
             target.append(y)
-       
-        # Concatenate across batches
-        
         z_matrix = torch.cat(point_list, dim=0).numpy()  # Shape: [50*32, 20]
         target_tensor = torch.cat(target, dim=0)  # Shape: [50*32]
         
-        #____Sample From Prior _________
+        #____get x,y coordinates of latent space points _________
         x = z_matrix[:, 0]  # First principal component
         y = z_matrix[:, 1]  # Second principal component
 
-        scatter = plt.scatter(x, y, c=target_tensor.detach().numpy(), alpha=1, s=3)
+        #________Get model variance background______________________
+        # Define grid limits
+        x_min, x_max = -2, 6
+        y_min, y_max = -7, 2
+        # Define step size (adjust for resolution)
+        x_step = 0.05
+        y_step = 0.05
+        # Create grid points
+        x_values = np.arange(x_min, x_max + x_step, x_step)
+        y_values = np.arange(y_min, y_max + y_step, y_step)
+        X, Y = np.meshgrid(x_values, y_values)
+        # Flatten the grid for scatter plot
+        x_flat = X.flatten()
+        y_flat = Y.flatten()
+        # Ensure we get the correct shape
+        grid_shape = X.shape  # This should be (rows, cols
+        grid_points = torch.tensor(np.stack((x_flat, y_flat), axis=0), dtype=torch.float32)
+        grid_points_var = model.decoder(grid_points.T).mean
+        flattened = grid_points_var.reshape(grid_points.shape[1], 1, 28 * 28)  # or variable.view(875, 1, 784)
+        # Take mean across last dimension (875, 1, 784) -> (875, 1)
+        mean_varaince = flattened.std(dim=-1)
+        background_colors = mean_varaince.squeeze().detach().cpu().numpy()
+        background_colors = background_colors.reshape(grid_shape)
 
+        #___________create plot________________________
+        plt.pcolormesh(X, Y, background_colors, cmap="coolwarm")  
+        scatter = plt.scatter(x, y, c=target_tensor.detach().numpy(), alpha=1, s=3)
         # Create a legend
         # Assuming target_tensor contains values 0, 1, 2 for the three classes
         classes = [0, 1, 2]
@@ -344,9 +371,11 @@ if __name__ == "__main__":
         ]
 
         plt.legend(handles=legend_handles, title="Classes")
+        plt.xlim(-2, 6)  # X-axis limits from 0 to num_steps
+        plt.ylim(-7, 2)
         # Labels and title
-        plt.title("Gauss Prior")
-        plt.savefig("plot_samples.png", dpi=300, bbox_inches="tight")
+        plt.title("VAE Latent Space")
+        plt.savefig("Project2/plots/plot_samples.png", dpi=300, bbox_inches="tight")
 
     elif args.mode == "PartB":
 
@@ -372,7 +401,7 @@ if __name__ == "__main__":
         print("Print mean test elbo:", mean_elbo)
 
     elif args.mode == "geodesics":
-
+        import numpy as np
         model = VAE(
             GaussianPrior(M),
             GaussianDecoder(new_decoder()),
@@ -417,6 +446,18 @@ if __name__ == "__main__":
             #Compute Pull-back metric
             return torch.matmul(J.T, J)
         
+        def compute_energy_simple(c):
+            energy = 0.0
+            for s in range(1, c.shape[0]):
+                f_s = mean_func(c[s,:].unsqueeze(0))  # f(c_s)
+                f_s_minus_1 = mean_func(c[s - 1,:].unsqueeze(0))  # f(c_s-1)
+                
+                # Compute squared L2 norm
+                diff = f_s - f_s_minus_1
+                energy += torch.norm(diff) ** 2  # Squared L2 norm of the difference
+            
+            return energy
+
         def compute_energy(c):
             delta_t = 1 / (S - 1)
             energy = 0
@@ -443,27 +484,54 @@ if __name__ == "__main__":
             
             point_list.append(z)  # Keep as tensor
             target.append(y)
+
         # Concatenate across batches
         z_matrix = torch.cat(point_list, dim=0).numpy()  # Shape: [50*32, 20]
         target_tensor = torch.cat(target, dim=0)  # Shape: [50*32]
-
         x = z_matrix[:, 0]  # First principal component
         y = z_matrix[:, 1]  # Second principal component
+
+        #adds varaince background color
+        if True:
+            x_min = min(x)-1
+            x_max = max(x)+1
+            y_min = min(y)-1
+            y_max = max(y)+1
+            # Define step size (adjust for resolution)
+            x_step = 0.05
+            y_step = 0.05
+            # Create grid points
+            x_values = np.arange(x_min, x_max + x_step, x_step)
+            y_values = np.arange(y_min, y_max + y_step, y_step)
+            X, Y = np.meshgrid(x_values, y_values)
+            # Flatten the grid for scatter plot
+            x_flat = X.flatten()
+            y_flat = Y.flatten()
+            # Ensure we get the correct shape
+            grid_shape = X.shape  # This should be (rows, cols
+            grid_points = torch.tensor(np.stack((x_flat, y_flat), axis=0), dtype=torch.float32)
+            grid_points_var = model.decoder(grid_points.T).mean
+            flattened = grid_points_var.reshape(grid_points.shape[1], 1, 28 * 28)  # or variable.view(875, 1, 784)
+            # Take mean across last dimension (875, 1, 784) -> (875, 1)
+            mean_varaince = flattened.std(dim=-1)
+            background_colors = mean_varaince.squeeze().detach().cpu().numpy()
+            background_colors = background_colors.reshape(grid_shape)
+            plt.pcolormesh(X, Y, background_colors, cmap="Greens")  
+            plt.xlim(x_min, x_max)  # X-axis limits from 0 to num_steps
+            plt.ylim(y_min, y_max)
 
         tensor_list = [tensor.squeeze(1) for tensor in images]
 
         # Concatenate the list of tensors along the first dimension
         images_tensor = torch.cat(tensor_list, dim=0)
 
-        n = 10  # You can set this to any number of pairs you want to process
+        n = 25  # You can set this to any number of pairs you want to process
 
         point_pair = select_random_point_pairs(z_matrix.shape[0], n)
-
+        print(point_pair)
         # Track energy values and curves for plotting
         all_curves = []
         all_energy_values = []
-        #x1, y1 = next(iter(mnist_test_loader))  # This gives you the first batch
-        #x2, y2 = next(iter(mnist_test_loader))  # This gives you the second batch
         for pair in tqdm(range(n), desc="Optimizing points", unit="Point Pair"):
             r_1, r_2 = point_pair[pair]
             
@@ -476,7 +544,7 @@ if __name__ == "__main__":
             point_2 = torch.tensor(z_matrix[r_2])
 
             # Number of sample points along the curve
-            S = 25
+            S = 20
 
             # Initialize intermediate points as a straight line between start and end (excluding start and end)
             c_inner = torch.linspace(0, 1, S-2).unsqueeze(1) * (point_2 - point_1) + point_1  # Exclude start and end
@@ -486,6 +554,7 @@ if __name__ == "__main__":
             # Track energy over iterations
             energy_values = []
             num_epoch = 100
+            
             # Example optimization loop
             optimizer = torch.optim.Adam([c_inner], lr=0.01)  # Optimizing the intermediate points `c_inner`
 
@@ -504,25 +573,32 @@ if __name__ == "__main__":
             #plot curve:
             plt.plot(c_final[:, 0], c_final[:, 1])  # Example if it's 2D latent space
         
+        # Define color map for classes
+        color_map = {0: 'red', 1: 'blue', 2: 'purple'}
 
-        scatter = plt.scatter(x, y, c=target_tensor.detach().numpy(), alpha=1, s=3)
+        # Assign colors to points based on their class label
+        colors = [color_map[label] for label in target_tensor.detach().numpy()]
 
-        # Create a legend
-        # Assuming target_tensor contains values 0, 1, 2 for the three classes
+        scatter = plt.scatter(x, y, c=colors, alpha=1, s=3)
+        #scatter = plt.scatter(x, y, c=target_tensor.detach().numpy())
+        
+        # Create a legend with color patches matching the points' colors
         classes = [0, 1, 2]
         class_labels = ['0', '1', '2']
 
-        # Create a legend with color patches
+        # Create legend handles with corresponding colors
         legend_handles = [
-            plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=scatter.cmap(scatter.norm(class_value)), markersize=8, label=label)
+            plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=color_map[class_value], markersize=8, label=label)
             for class_value, label in zip(classes, class_labels)
         ]
+
+        # Add the legend to the plot
         plt.legend(handles=legend_handles, title="Classes")
 
         plt.title('Optimized Geodesic Curve')
         plt.xlabel('Latent Dimension 1')
         plt.ylabel('Latent Dimension 2')
-        plt.savefig("Project2/curve_plot.png")
+        plt.savefig("Project2/plots/Geodesic_plot.png")
         plt.show()
 
         # After optimization, plot the energy values
