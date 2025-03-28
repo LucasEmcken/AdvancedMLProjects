@@ -24,7 +24,13 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--decoders",
     type=int,
-    default=3
+    default=4
+)
+
+parser.add_argument(
+    "--model_path",
+    type=str,
+    default="./models"
 )
 
 
@@ -38,6 +44,7 @@ test_tensors = datasets.MNIST(
 args = parser.parse_args()
 M=2
 max_num_decoders = args.decoders
+model_path = args.model_path
 
 test_data = test_tensors.data[0:1000].float().to(device)
 
@@ -58,7 +65,7 @@ for i in range(1,max_num_decoders+1):
                 [GaussianDecoder(new_decoder(M=M)) for _ in range(i)],  # Create an ensemble of decoders
                 GaussianEncoder(new_encoder(M=M))
             ).to(device)
-            model.load_state_dict(torch.load("./Project2/models/model_{}_{}.pt".format(i,j)))
+            model.load_state_dict(torch.load(model_path+"/model_{}_{}.pt".format(i,j)))
             model.eval()
             q = model.encoder(pair[0].unsqueeze(0).unsqueeze(0))
             z1 = q.rsample().detach().cpu()
@@ -80,4 +87,4 @@ print(euclidian_cov)
 
 plt.plot(range(1, max_num_decoders+1), euclidian_cov, label="Euclidian Covariance")
 plt.xlabel("Number of Decoders")
-plt.show()
+plt.savefig("euclidian_covariance.png")
