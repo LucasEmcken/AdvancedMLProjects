@@ -160,7 +160,7 @@ class VAE_ensemble(nn.Module):
     Variational Autoencoder (VAE) with an ensemble of decoders.
     """
 
-    def __init__(self, prior, decoders, encoder):
+    def __init__(self, prior, decoders, encoder,num_decoder):
         """
         Parameters:
         prior: [torch.nn.Module]
@@ -174,6 +174,7 @@ class VAE_ensemble(nn.Module):
         self.prior = prior
         self.decoders = nn.ModuleList(decoders)  # Store decoders in a ModuleList
         self.encoder = encoder
+        self.num_decoder = num_decoder
 
     def elbo(self, x):
         """
@@ -182,13 +183,12 @@ class VAE_ensemble(nn.Module):
         q = self.encoder(x)
         z = q.rsample()
 
-        # Compute log-probabilities for each decoder
-        decoder_log_probs = torch.stack([decoder(z).log_prob(x) for decoder in self.decoders], dim=0)
+        ran_num= torch.randint(0, self.num_decoder, (1,)).item()
+        decoder = self.decoders[ran_num]
 
-        # Aggregate decoder likelihoods (e.g., average over ensemble)
-        avg_decoder_log_prob = torch.mean(decoder_log_probs, dim=0)  # Mean over ensemble
-
-        elbo = torch.mean(avg_decoder_log_prob - q.log_prob(z) + self.prior().log_prob(z))
+        elbo = torch.mean(
+            decoder(z).log_prob(x) - q.log_prob(z) + self.prior().log_prob(z)
+        )
         return elbo
 
     def sample(self, n_samples=1, use_decoder=None):

@@ -38,7 +38,7 @@ if __name__ == "__main__":
 
     # python3 ensemble_vae.py sample --device cpu --latent-dim 2 --epochs 50 --batch-size 64 --experiment-folder models
 
-    # python3 Project2/ensemble_vae.py trainEnsamble --device cpu --latent-dim 2 --epochs 50 --batch-size 64 --experiment-folder Project2/models
+    # python3 Project2/ensemble_vae.py trainEnsamble --device cpu --latent-dim 2 --epochs 100 --batch-size 64 --experiment-folder Project2/models
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -170,13 +170,14 @@ if __name__ == "__main__":
         model = VAE_ensemble(
             GaussianPrior(M),
             [GaussianDecoder(new_decoder(M=M)) for _ in range(num_decoders)],  # Create an ensemble of decoders
-            GaussianEncoder(new_encoder(M=M))
+            GaussianEncoder(new_encoder(M=M)),
+            num_decoders
         ).to(device)
         from scipy.stats import multivariate_normal
         import seaborn as sns
         from scipy.stats import gaussian_kde
         import numpy as np
-        model.load_state_dict(torch.load(args.experiment_folder + "/model_3_1.pt"))
+        model.load_state_dict(torch.load(args.experiment_folder + "/model_3_10.pt"))
         model.eval()
         
         data_iter = iter(mnist_train_loader)
