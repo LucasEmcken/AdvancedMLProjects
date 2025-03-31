@@ -79,37 +79,40 @@ for i in range(1, max_num_decoders+1):
             
             #Compute Geodesic distance
             t_steps = 10 #Ponts on the geodesic
-            t_vals = torch.linspace(0,1,t_steps)
-            geodesic_energy=0
-            
-            for t in t_vals[:-1]:
-                t1=t_vals[i] 
-                t2=t_vals[i+1]
-            
-                interpolated_z1 = (1 - t1) * z1 + t1 * z2
-                interpolated_z2 = (1 - t2) * z1 + t2 * z2
-                    
-                samples = 20
-                ensemble_energy = 0
-                pairs = 0
-                
-                for _ in range(samples):  #We are using Monte Carlo approximation, however im not sure that i implemented it correctly
-                    decoder_list = [model.decoders[k] for k in range(i)]
-                    if len(decoder_list)==1:
-                        decoder1=decoder_list[0]
-                        decoder2=decoder_list[0]
-                    else:
-                        decoder1, decoder2 = random.sample(decoder_list, 2)
-                    mean1=decoder1(interpolated_z1.to(device)).mean.cpu()
-                    mean2=decoder2(interpolated_z2.to(device)).mean.cpu()
-                    
-                    ensemble_energy+=torch.norm(mean1-mean2).item()**2 #Norm^2
-                    pairs+=1
+            t_vals = torch.linspace(0, 1, t_steps, requires_grad=True).to(device)
+            optimizer = torch.optim.Adam([t_vals], lr=0.01)  # Use Adam optimizer for interpolation points
+            for _ in tqdm(range(100)):  # Number of optimization steps
+                optimizer.zero_grad()
+                geodesic_energy = torch.tensor(0.0, requires_grad=True, device=device)  # Initialize as a tensor
 
-                geodesic_energy+=ensemble_energy/pairs #Average energy
+                for t1, t2 in zip(t_vals[:-1], t_vals[1:]):
+                    interpolated_z1 = (1 - t1) * z1 + t1 * z2
+                    interpolated_z2 = (1 - t2) * z1 + t2 * z2
 
-            geodesic_distances.append(math.sqrt(geodesic_energy)) #Geodesic distance
-        
+                    ensemble_energy = torch.tensor(0.0, device=device)  # Initialize as a tensor
+                    pairs = 0
+                    samples = 20
+                    for _ in range(samples):
+                        decoder_list = [model.decoders[k] for k in range(i)]
+                        if len(decoder_list) == 1:
+                            decoder1 = decoder_list[0]
+                            decoder2 = decoder_list[0]
+                        else:
+                            decoder1, decoder2 = random.sample(decoder_list, 2)
+
+                        mean1 = decoder1(interpolated_z1.to(device)).mean
+                        mean2 = decoder2(interpolated_z2.to(device)).mean
+
+                        ensemble_energy += torch.norm(mean1 - mean2)**2  # Norm^2 remains a tensor
+                        pairs += 1
+
+                    geodesic_energy = geodesic_energy + (ensemble_energy / pairs)
+
+                geodesic_energy.backward()  # Compute gradients
+                optimizer.step()  # Update interpolation points
+
+            # After optimization, compute the final geodesic distances
+            geodesic_distances.append(math.sqrt(geodesic_energy.item()))  # Convert to float only for final result
         #CoV
         euclidian_cov[i].append(np.std(euclidian_distances) / np.mean(euclidian_distances))
         geodesic_cov[i].append(np.std(geodesic_distances) / np.mean(geodesic_distances))
