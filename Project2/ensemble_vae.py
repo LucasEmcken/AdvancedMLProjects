@@ -30,6 +30,8 @@ if __name__ == "__main__":
 
     # python3 Project2/ensemble_vae.py geodesics --device cpu --latent-dim 2 --epochs 50 --batch-size 64 --experiment-folder Project2/models
 
+    # python3 Project2/ensemble_vae.py geodesics_ensamble --device cpu --latent-dim 2 --epochs 50 --batch-size 64 --experiment-folder Project2/models
+
     # python3 Project2/ensemble_vae.py TestEnsamble --device cpu --latent-dim 2 --epochs 50 --batch-size 64 --experiment-folder Project2/models
 
     # python3 Project2/ensemble_vae.py sample --device cpu --latent-dim 2 --epochs 100 --batch-size 64 --experiment-folder Project2/models
@@ -45,7 +47,7 @@ if __name__ == "__main__":
         "mode",
         type=str,
         default="train",
-        choices=["train", "sample", "eval", "geodesics","testing", "trainEnsamble","TestEnsamble"],
+        choices=["train", "sample", "eval", "geodesics","testing", "trainEnsamble","TestEnsamble","geodesics_ensamble"],
         help="what to do when running the script (default: %(default)s)",
     )
     parser.add_argument(
@@ -403,6 +405,7 @@ if __name__ == "__main__":
 
     elif args.mode == "geodesics":
         import numpy as np
+        import json
         model = VAE(
             GaussianPrior(M),
             GaussianDecoder(new_decoder()),
@@ -530,6 +533,11 @@ if __name__ == "__main__":
 
         point_pair = select_random_point_pairs(z_matrix.shape[0], n)
         print(point_pair)
+
+        if True:
+            with open("points.json", "w") as f:
+                json.dump(point_pair, f)
+
         # Track energy values and curves for plotting
         all_curves = []
         all_energy_values = []
@@ -545,7 +553,7 @@ if __name__ == "__main__":
             point_2 = torch.tensor(z_matrix[r_2])
 
             # Number of sample points along the curve
-            S = 20
+            S = 30
 
             # Initialize intermediate points as a straight line between start and end (excluding start and end)
             c_inner = torch.linspace(0, 1, S-2).unsqueeze(1) * (point_2 - point_1) + point_1  # Exclude start and end
@@ -554,7 +562,7 @@ if __name__ == "__main__":
             
             # Track energy over iterations
             energy_values = []
-            num_epoch = 100
+            num_epoch = 500
             
             # Example optimization loop
             optimizer = torch.optim.Adam([c_inner], lr=0.01)  # Optimizing the intermediate points `c_inner`
@@ -562,7 +570,7 @@ if __name__ == "__main__":
             # Wrap the epoch loop with tqdm for progress tracking
             for epoch in range(num_epoch):
                 optimizer.zero_grad()  # Zero the gradients
-                energy = compute_energy(c_inner)  # Compute the current energy
+                energy = compute_energy_simple(c_inner)  # Compute the current energy
                 energy_values.append(energy.item())  # Store the energy value for this iteration
 
                 energy.backward()  # Compute gradients
@@ -599,7 +607,7 @@ if __name__ == "__main__":
         plt.title('Optimized Geodesic Curve')
         plt.xlabel('Latent Dimension 1')
         plt.ylabel('Latent Dimension 2')
-        plt.savefig("Project2/plots/Geodesic_plot.png")
+        plt.savefig("Project2/plots/Geodesic_plot_simple.png")
         plt.show()
 
         # After optimization, plot the energy values
@@ -613,6 +621,179 @@ if __name__ == "__main__":
        
 
 
+
+    elif args.mode == "geodesics_ensamble":
+        import numpy as np
+        import json
+        num_decoders= 4
+        num_model = 2
+        model = VAE_ensemble(
+            GaussianPrior(M),
+            [GaussianDecoder(new_decoder(M=M)) for _ in range(num_decoders)],  # Create an ensemble of decoders
+            GaussianEncoder(new_encoder(M=M)),
+        ).to(device)
+        model.load_state_dict(torch.load(args.experiment_folder + "/model_"+str(num_decoders)+"_"+str(num_model)+".pt"))
+        model.eval()
+        
+        def mean_func(model,z):
+            ran_num= torch.randint(0, model.num_decoder, (1,)).item()
+            decoder = model.decoders[ran_num]
+            return decoder(z).mean.view(-1)  # Flatten output to (784,)
+        
+        def compute_energy_ensamble(model,c):
+            energy = 0.0
+            for s in range(1, c.shape[0]):
+                f_s = mean_func(model,c[s,:].unsqueeze(0))  # f(c_s)
+                f_s_minus_1 = mean_func(model,c[s - 1,:].unsqueeze(0))  # f(c_s-1)
+                
+                # Compute squared L2 norm
+                diff = f_s - f_s_minus_1
+                energy += torch.norm(diff) ** 2  # Squared L2 norm of the difference
+            
+            return energy
+        
+        #________Extract points____________
+        data_iter = iter(mnist_train_loader)
+        point_list = []
+        target = []
+        images = []
+        for i in range(30):
+            x, y = next(data_iter)
+            images.append(x)
+            x = x.to(device)
+            q = model.encoder(x)
+            
+            z = q.rsample().detach().cpu()
+            
+            point_list.append(z)  # Keep as tensor
+            target.append(y)
+
+        # Concatenate across batches
+        z_matrix = torch.cat(point_list, dim=0).numpy()  # Shape: [50*32, 20]
+        target_tensor = torch.cat(target, dim=0)  # Shape: [50*32]
+        x = z_matrix[:, 0]  # First principal component
+        y = z_matrix[:, 1]  # Second principal component
+
+        #adds varaince background color
+        if True:
+            x_min = min(x)-0.5
+            x_max = max(x)+0.5
+            y_min = min(y)-0.5
+            y_max = max(y)+0.5
+            # Define step size (adjust for resolution)
+            x_step = 0.05
+            y_step = 0.05
+            # Create grid points
+            x_values = np.arange(x_min, x_max + x_step, x_step)
+            y_values = np.arange(y_min, y_max + y_step, y_step)
+            X, Y = np.meshgrid(x_values, y_values)
+            # Flatten the grid for scatter plot
+            x_flat = X.flatten()
+            y_flat = Y.flatten()
+            # Ensure we get the correct shape
+            grid_shape = X.shape  # This should be (rows, cols
+            grid_points = torch.tensor(np.stack((x_flat, y_flat), axis=0), dtype=torch.float32)
+            grid_points_var = model.decoders[0](grid_points.T).mean
+            flattened = grid_points_var.reshape(grid_points.shape[1], 1, 28 * 28)  # or variable.view(875, 1, 784)
+            # Take mean across last dimension (875, 1, 784) -> (875, 1)
+            mean_varaince = flattened.std(dim=-1)
+            background_colors = mean_varaince.squeeze().detach().cpu().numpy()
+            background_colors = background_colors.reshape(grid_shape)
+            plt.pcolormesh(X, Y, background_colors, cmap="Greens")  
+            plt.xlim(x_min, x_max)  # X-axis limits from 0 to num_steps
+            plt.ylim(y_min, y_max)
+
+        tensor_list = [tensor.squeeze(1) for tensor in images]
+
+        # Concatenate the list of tensors along the first dimension
+        images_tensor = torch.cat(tensor_list, dim=0)
+
+        n = 25  # You can set this to any number of pairs you want to process
+
+        with open("points.json", "r") as f:
+            point_pair = json.load(f)
+
+        # Track energy values and curves for plotting
+        all_curves = []
+        all_energy_values = []
+        for pair in tqdm(range(n), desc="Optimizing points", unit="Point Pair"):
+            r_1, r_2 = point_pair[pair]
+            
+            img_1 = images_tensor[r_1,:,:].unsqueeze(0).to(device)  # First image from the first batch (add batch dimension)
+
+            # Access the second batch
+            img_2 = images_tensor[r_2,:,:].unsqueeze(0).to(device)
+
+            point_1 = torch.tensor(z_matrix[r_1])  # Assuming model.encoder gives the latent representation
+            point_2 = torch.tensor(z_matrix[r_2])
+
+            # Number of sample points along the curve
+            S = 30
+
+            # Initialize intermediate points as a straight line between start and end (excluding start and end)
+            c_inner = torch.linspace(0, 1, S-2).unsqueeze(1) * (point_2 - point_1) + point_1  # Exclude start and end
+            # Now pass only the intermediate points to nn.Parameter
+            c_inner = torch.nn.Parameter(c_inner)  # Optimizable parameters
+            
+            # Track energy over iterations
+            energy_values = []
+            num_epoch = 500
+            
+            # Example optimization loop
+            optimizer = torch.optim.Adam([c_inner], lr=0.01)  # Optimizing the intermediate points `c_inner`
+
+            # Wrap the epoch loop with tqdm for progress tracking
+            for epoch in range(num_epoch):
+                optimizer.zero_grad()  # Zero the gradients
+                energy = compute_energy_ensamble(model, c_inner)  # Compute the current energy
+                energy_values.append(energy.item())  # Store the energy value for this iteration
+
+                energy.backward()  # Compute gradients
+                optimizer.step()  # Update the curve points to minimize the energy
+
+            # Store initial curve for plotting
+            c_final = torch.vstack([point_1, c_inner.detach(), point_2]).numpy() 
+
+            #plot curve:
+            plt.plot(c_final[:, 0], c_final[:, 1])  # Example if it's 2D latent space
+        
+        # Define color map for classes
+        color_map = {0: 'red', 1: 'blue', 2: 'purple'}
+
+        # Assign colors to points based on their class label
+        colors = [color_map[label] for label in target_tensor.detach().numpy()]
+
+        scatter = plt.scatter(x, y, c=colors, alpha=1, s=3)
+        #scatter = plt.scatter(x, y, c=target_tensor.detach().numpy())
+        
+        # Create a legend with color patches matching the points' colors
+        classes = [0, 1, 2]
+        class_labels = ['0', '1', '2']
+
+        # Create legend handles with corresponding colors
+        legend_handles = [
+            plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=color_map[class_value], markersize=8, label=label)
+            for class_value, label in zip(classes, class_labels)
+        ]
+
+        # Add the legend to the plot
+        plt.legend(handles=legend_handles, title="Classes")
+
+        plt.title('Optimized Geodesic 4-decoder Model')
+        plt.xlabel('Latent Dimension 1')
+        plt.ylabel('Latent Dimension 2')
+        plt.savefig("Project2/plots/Geodesic_plot_ensamble.png")
+        plt.show()
+
+        # After optimization, plot the energy values
+        plt.plot(energy_values)
+        plt.xlabel('Epochs')
+        plt.ylabel('Energy')
+        plt.title('Energy During Geodesic Optimization')
+        plt.savefig("Project2/energy_optim.png")
+        plt.show()
+
+       
 
 
 
