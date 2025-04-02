@@ -71,54 +71,22 @@ def new_decoder():
         nn.ConvTranspose2d(16, 1, 3, stride=2, padding=1, output_padding=1),
     )
     return decoder_net
-if __name__ == "__main__":
 
-    device = torch.device("cuda")
-
-    num_decoders=4
-    
-    model = VAE_ensemble(
-        GaussianPrior(M),
-        [GaussianDecoder(new_decoder()) for _ in range(num_decoders)],  # Create an ensemble of decoders
-        GaussianEncoder(new_encoder())
-    ).to(device)
-    # from scipy.stats import multivariate_normal
-    # import seaborn as sns
-    # from scipy.stats import gaussian_kde
-    # import numpy as np
-    model.load_state_dict(torch.load("models/model_4_1.pt"))
-    model.eval()
-    
-    
-    # latent_points_np = torch.cat(latent_points, dim=0).numpy()
-    latent_points = []
-    with torch.no_grad():
-        for x, _ in mnist_train_loader:  # Images only, ignore labels
-            x = x.to(device)
-            z_test = model.encoder(x).mean  # Extract mean latent representation
-            latent_points.append(z_test.cpu())
-    latent_points_np = torch.cat(latent_points, dim=0).numpy()
-
-    
-    # print(model.decoders)
-    decoders = model.decoders
-
-
-    # Define energy weights (random for now, but could be learned)
-    E_lk = torch.rand(num_decoders, num_decoders, device=device)
-
-    # Sample two latent points
-    N_pairs = 100
-    z_0 = torch.tensor([0.0, -1.0], device=device, requires_grad=False)
-    z_1 = torch.tensor([1.0, -4.0], device=device, requires_grad=False)
-
+def calculate_energy(z_0, z_1, decoders, steps = 15, lr = 0.01, verbose=False, num_epochs=75, device = "cuda"):
     # Learnable parameters for the latent path
+    device = torch.device(device)
     num_steps = 15  # Number of discrete points along the curve
     t_values = torch.linspace(0, 1, num_steps, device=device).unsqueeze(1)  # Time steps
     interior_points = nn.Parameter(torch.lerp(z_0, z_1, t_values[1:-1]))  # Interpolation with learnable adjustment
 
     # Define optimizer
     optimizer = torch.optim.Adam([interior_points], lr=0.01)
+
+    num_decoders = len(decoders)
+
+    # Define energy weights (random for now, but could be learned)
+    E_lk = torch.rand(num_decoders, num_decoders, device=device)
+
 
     # Define energy function
     def compute_energy(latent_path, decoders, E_lk):
@@ -170,9 +138,6 @@ if __name__ == "__main__":
 
         return torch.stack(new_path)
 
-    # Optimization loop
-    num_epochs = 50
-
     for epoch in range(num_epochs):
         optimizer.zero_grad()
         
@@ -190,64 +155,7 @@ if __name__ == "__main__":
                 latent_path = resample_latent_path(latent_path, num_steps)
                 interior_points.copy_(latent_path[1:-1])  # Update learnable points
 
-        if epoch % 50 == 0:
+        if epoch % 50 == 0 and verbose:
             print(f"Epoch {epoch}: Energy = {energy.item():.6f}")
-    # Final optimized latent path
-    # optimized_path = interior_points.detach()
-    optimized_path = torch.cat([z_0.unsqueeze(0), interior_points.detach(), z_1.unsqueeze(0)], dim=0)
-
-    optimized_path_np = optimized_path.detach().cpu().numpy()
-
-
-    # Define grid over the latent space
-    grid_x, grid_y = np.meshgrid(
-        np.linspace(-0.8, 1.7, 100),  # Adjust grid range as needed
-        np.linspace(-6, -0.5, 100)
-    )
-    grid_points_np = np.c_[grid_x.ravel(), grid_y.ravel()]  # Flattened grid points
-
-    grid_points = torch.tensor(grid_points_np, dtype=torch.float32, device=device)
-    num_points = grid_points.shape[0]
-
-    # Storage for uncertainty values
-    uncertainty_values = np.zeros(num_points)
-
-    # Compute uncertainty at each grid point
-    with torch.no_grad():
-        for i, grid_point in enumerate(grid_points):
-            grid_point = grid_point.unsqueeze(0)  # Add batch dimension
-            decoder_outputs = torch.stack([dec(grid_point).mean for dec in decoders])  # (num_decoders, 1, 28, 28)
-            pixel_std = decoder_outputs.std(dim=0)  # Standard deviation across decoders (shape: 1, 28, 28)
-            total_std = pixel_std.sum()  # Sum over all pixels to get a scalar value
-            uncertainty_values[i] = total_std.item()  # Store result
-
-    # Reshape uncertainty values for contour plot
-    uncertainty = uncertainty_values.reshape(grid_x.shape)
-    # print(uncertainty)
-    # Plotting
-    plt.figure(figsize=(7, 6))
-
-    # Contour plot of uncertainty
-    plt.contourf(grid_x, grid_y, uncertainty, levels=100, cmap="coolwarm", alpha=0.7)
-    plt.colorbar(label="Uncertainty (Mean Variance)")
-
-    # Plot the latent path
-    # plt.figure(figsize=(6, 6))
-    # plt.plot(optimized_path_np[:, 0], optimized_path_np[:, 1], marker="o", linestyle="-", color="b", label="Latent Path")
-    plt.plot(optimized_path_np[:, 0], optimized_path_np[:, 1], linestyle="-", color="b", label="Latent Path")
-    plt.scatter(latent_points_np[:, 0], latent_points_np[:, 1], color="gray", alpha=0.5, s=10, label="Test Data")
-
-    # Mark start and end points
-    # plt.scatter(optimized_path_np[0, 0], optimized_path_np[0, 1], color="green", s=100, label="Start (z_0)")
-    # plt.scatter(optimized_path_np[-1, 0], optimized_path_np[-1, 1], color="red", s=100, label="End (z_1)")
-
-    # Labels and title
-    plt.xlabel("Latent Dimension 1")
-    plt.ylabel("Latent Dimension 2")
-    plt.title("Optimized Latent Path")
-    plt.legend()
-    plt.grid(True)
-
-    # Save the figure
-    plt.savefig("latent_path_arc_long.png", dpi=300)
-    plt.show()
+        
+    return energy.item()
