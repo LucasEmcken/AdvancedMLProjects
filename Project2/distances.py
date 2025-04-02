@@ -103,3 +103,6 @@ plt.plot(range(1,max_num_decoders+1), geodesic_cov, label="Euclidian Covariance"
 plt.plot(range(1, max_num_decoders+1), euclidian_cov, label="Euclidian Covariance")
 plt.xlabel("Number of Decoders")
 plt.savefig("euclidian_covariance.png")
+
+
+# [np.float64(0.608319284985634), np.float64(0.608319284985634), np.float64(0.608319284985634), np.float64(0.608319284985634)]
