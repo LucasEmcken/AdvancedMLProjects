@@ -92,6 +92,7 @@ for i in range(1, max_num_decoders+1):
 euclidian_cov = [euclidian_cov[i] for i in range(1, max_num_decoders+1)]
 print(euclidian_cov)
 
+plt.plot(range(1,max_num_decoders+1), geodesic_cov, label="Euclidian Covariance")
 plt.plot(range(1, max_num_decoders+1), euclidian_cov, label="Euclidian Covariance")
 plt.xlabel("Number of Decoders")
 plt.savefig("euclidian_covariance.png")
