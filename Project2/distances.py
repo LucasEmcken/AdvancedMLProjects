@@ -52,10 +52,11 @@ sample_pairs = [(test_data[random.randint(0,999)], test_data[random.randint(0,99
 print(len(sample_pairs))
 print(sample_pairs[0][0].shape)
 euclidian_cov = dict()
+geodesic_cov = dict()
 
 for i in range(1,max_num_decoders+1):
     euclidian_cov[i] = []
-    geodesic_cov = []
+    geodesic_cov[i] = []
     for pair in sample_pairs:
         euclidian_distances = []
         geodesic_distances = []
@@ -89,7 +90,9 @@ for i in range(1,max_num_decoders+1):
 
 for i in range(1, max_num_decoders+1):
     euclidian_cov[i] = np.mean(euclidian_cov[i])
+    geodesic_cov[i] = np.mean(geodesic_cov[i])
 euclidian_cov = [euclidian_cov[i] for i in range(1, max_num_decoders+1)]
+geodesic_cov = [geodesic_cov[i] for i in range(1, max_num_decoders+1)]
 print(euclidian_cov)
 
 plt.plot(range(1,max_num_decoders+1), geodesic_cov, label="Euclidian Covariance")
