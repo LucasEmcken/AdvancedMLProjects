@@ -16,6 +16,7 @@ import argparse
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 from utils import subsample
+from latent_path_2 import calculate_energy
 
 device = "cpu"
 parser = argparse.ArgumentParser()
@@ -72,13 +73,15 @@ for i in range(1,max_num_decoders+1):
             model.decoders = model.decoders[:i]  # Use only the first i decoders
             model.eval()
             q = model.encoder(pair[0].unsqueeze(0).unsqueeze(0))
-            z1 = q.rsample().detach().cpu()
+            z1 = q.rsample().detach().cpu()[0]
             q = model.encoder(pair[1].unsqueeze(0).unsqueeze(0))
-            z2 = q.rsample().detach().cpu()
+            z2 = q.rsample().detach().cpu()[0]
             euclidian_distances.append(torch.norm(z1-z2).item())
             #calculate geodesic distance
+
+            geodesic_distance = calculate_energy(z1, z2, model.decoders, device = device)
             #
-            geodesic_distance = 1
+            # geodesic_distance = 1
             geodesic_distances.append(geodesic_distance)
 
             
