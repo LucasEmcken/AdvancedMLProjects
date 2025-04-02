@@ -9,6 +9,7 @@ import os
 import math
 import matplotlib.pyplot as plt
 import random
+import torch
 import os
 print(os.getcwd())
 from vae_model import VAE, GaussianPrior, GaussianDecoder, GaussianEncoder, VAE_ensemble, train, new_encoder, new_decoder
@@ -78,8 +79,8 @@ for i in range(1,max_num_decoders+1):
             z2 = q.rsample().detach().cpu()[0]
             euclidian_distances.append(torch.norm(z1-z2).item())
             #calculate geodesic distance
-
-            geodesic_distance = calculate_energy(z1, z2, model.decoders, device = device)
+            model = model.to("cuda")
+            geodesic_distance = calculate_energy(torch.tensor(z1).to("cuda"), torch.tensor(z2).to("cuda"), model.decoders, device = "cuda", verbose=True)
             #
             # geodesic_distance = 1
             geodesic_distances.append(geodesic_distance)
