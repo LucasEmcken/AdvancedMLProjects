@@ -68,6 +68,7 @@ for i in range(1,max_num_decoders+1):
             ).to(device)
             model.load_state_dict(torch.load(model_path+"/model_{}_{}.pt".format(max_num_decoders,j)))
             model.num_decoder = i 
+            model.decoders = model.decoders[:i]  # Use only the first i decoders
             model.eval()
             q = model.encoder(pair[0].unsqueeze(0).unsqueeze(0))
             z1 = q.rsample().detach().cpu()
@@ -76,9 +77,13 @@ for i in range(1,max_num_decoders+1):
             euclidian_distances.append(torch.norm(z1-z2).item())
             #calculate geodesic distance
             #
+            geodesic_distance = 1
+            geodesic_distances.append(geodesic_distance)
+
             
         #calculate coefficient of variation
         euclidian_cov[i].append(np.std(euclidian_distances)/np.mean(euclidian_distances))
+        geodesic_cov[i].append(np.std(geodesic_distances) / np.mean(geodesic_distances))
 
 
 
