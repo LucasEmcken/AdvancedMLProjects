@@ -48,7 +48,7 @@ model_path = args.model_path
 
 test_data = test_tensors.data[0:1000].float().to(device)
 
-sample_pairs = [(test_data[random.randint(0,1000)], test_data[random.randint(0,1000)]) for i in range(10)]
+sample_pairs = [(test_data[random.randint(0,999)], test_data[random.randint(0,999)]) for i in range(10)]
 print(len(sample_pairs))
 print(sample_pairs[0][0].shape)
 euclidian_cov = dict()
@@ -60,12 +60,14 @@ for i in range(1,max_num_decoders+1):
         euclidian_distances = []
         geodesic_distances = []
         for j in range(1,11):
+            torch.manual_seed(0)
             model = VAE_ensemble(
                 GaussianPrior(M),
-                [GaussianDecoder(new_decoder(M=M)) for _ in range(i)],  # Create an ensemble of decoders
+                [GaussianDecoder(new_decoder(M=M)) for _ in range(max_num_decoders)],  # Create an ensemble of decoders
                 GaussianEncoder(new_encoder(M=M))
             ).to(device)
-            model.load_state_dict(torch.load(model_path+"/model_{}_{}.pt".format(i,j)))
+            model.load_state_dict(torch.load(model_path+"/model_{}_{}.pt".format(max_num_decoders,j)))
+            model.num_decoder = i 
             model.eval()
             q = model.encoder(pair[0].unsqueeze(0).unsqueeze(0))
             z1 = q.rsample().detach().cpu()

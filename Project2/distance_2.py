@@ -67,7 +67,8 @@ for i in range(1, max_num_decoders+1):
                 [GaussianDecoder(new_decoder(M=M)) for _ in range(i)],
                 GaussianEncoder(new_encoder(M=M))
             ).to(device)
-            model.load_state_dict(torch.load(model_path+"/model_{}_{}.pt".format(i, j)))
+            model.load_state_dict(torch.load(model_path+"/model_{}_{}.pt".format(max_num_decoders, j)))
+            model.num_decoder = i
             model.eval()
             
             q = model.encoder(pair[0].unsqueeze(0).unsqueeze(0))

@@ -24,9 +24,6 @@
 # Program_name_and_options
 source /zhome/5f/1/167776/playground/bin/activate
 
-python ensemble_vae.py trainEnsamble --num-decoders 1 --model-nr $LSB_JOBINDEX --device cpu --latent-dim 2 --epochs 100 --batch-size 64
-python ensemble_vae.py trainEnsamble --num-decoders 2 --model-nr $LSB_JOBINDEX --device cpu --latent-dim 2 --epochs 100 --batch-size 64
-python ensemble_vae.py trainEnsamble --num-decoders 3 --model-nr $LSB_JOBINDEX --device cpu --latent-dim 2 --epochs 100 --batch-size 64
 python ensemble_vae.py trainEnsamble --num-decoders 4 --model-nr $LSB_JOBINDEX --device cpu --latent-dim 2 --epochs 100 --batch-size 64
 
 
