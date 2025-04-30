@@ -3,6 +3,7 @@ import torch
 from torch.utils.data import random_split
 from torch_geometric.datasets import TUDataset
 from torch_geometric.loader import DataLoader
+from torch_geometric.utils.convert import to_networkx
 import matplotlib.pyplot as plt
 import networkx as nx
 import random
@@ -11,7 +12,8 @@ device = 'cpu'
 # Load data
 dataset = TUDataset(root='./data/', name='MUTAG').to(device)
 print(dataset)
-print(dataset[2].num_nodes)
+print(type(dataset[2]))
+print(to_networkx(dataset[2],to_undirected=True))
 
 # %% 
 # Split into training and validation
