@@ -6,6 +6,7 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.utils.convert import to_networkx
 import matplotlib.pyplot as plt
 import networkx as nx
+from networkx import weisfeiler_lehman_graph_hash
 import random
 device = 'cpu'
 # %% Load the MUTAG dataset
@@ -19,6 +20,15 @@ print(to_networkx(dataset[2],to_undirected=True))
 # Split into training and validation
 rng = torch.Generator().manual_seed(0)
 train_dataset, validation_dataset, test_dataset = random_split(dataset, (100, 44, 44), generator=rng)
+
+def batch_hash(graphs):
+    """Compute the Weisfeiler-Lehman graph hash for a batch of graphs."""
+    hashes = []
+    for graph in graphs:
+        # Compute the WL hash for each graph
+        wl_hash = weisfeiler_lehman_graph_hash(graph)
+        hashes.append(wl_hash)
+    return hashes
 
 def convert_to_nx(data):
     """Convert a PyTorch Geometric data object to a NetworkX graph."""
@@ -52,15 +62,13 @@ class baseline:
 
 # %%
 
-train_dataset_nx = convert_to_nx(train_dataset)
-baseline_samples = baseline(train_dataset).sample_batch(10000)
+train_dataset_hash = batch_hash(convert_to_nx(train_dataset))
+baseline_samples_hash = batch_hash(baseline(train_dataset).sample_batch(100000))
 
 # %%
-print(baseline_samples)
-print("Percentage of unique samples:")
-print(len(set(baseline_samples))/len(baseline_samples))
+print(len(set(baseline_samples_hash))/len(baseline_samples_hash))
 print("Percentage of novel samples:")
-print(len([i for i in baseline_samples if i not in train_dataset_nx])/len(baseline_samples))
+print(len([i for i in baseline_samples_hash if i not in train_dataset_hash])/len(baseline_samples_hash))
 print("Percentage of novel and unique samples:")
-print(len(set(baseline_samples) - set(train_dataset_nx))/len(baseline_samples))
+print(len(set(baseline_samples_hash) - set(train_dataset_hash))/len(baseline_samples_hash))
 
