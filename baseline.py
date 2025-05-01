@@ -91,9 +91,8 @@ def calc_node_degrees(graphs):
     """Calculate the node degrees for a batch of graphs."""
     node_degrees = []
     for graph in graphs:
-        # Calculate the degree for each node in the graph
-        degrees = dict(graph.degree())
-        node_degrees.append(degrees)
+        node_degrees.append(len(graph.nodes()))
+    graph.degree()
     return node_degrees
 
 def calc_clustering(graphs):
@@ -113,3 +112,25 @@ def calc_eigenvector_centrality(graphs):
         eigenvector_centrality = nx.eigenvector_centrality(graph)
         eigenvector_centralities.append(eigenvector_centrality)
     return eigenvector_centralities
+
+# %%
+import matplotlib.pyplot as plt
+import numpy as np
+
+def plot_histogram(data, title="", xlabel="", ylabel=""):
+    """Plot a histogram of the data."""
+    plt.figure(figsize=(10, 6))
+    plt.hist(data, bins=30, alpha=0.7)
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.grid(axis='y', alpha=0.75)
+    plt.show()
+
+# %%
+# Calculate node degrees for the baseline samples
+node_degrees_baseline = calc_node_degrees(baseline_samples)
+node_degrees_training = calc_node_degrees(train_dataset_nx)
+print(node_degrees_baseline)
+plot_histogram(node_degrees_baseline, title="Node Degrees in Baseline Samples", xlabel="Degree", ylabel="Frequency")
+plot_histogram(node_degrees_training, title="Node Degrees in Training Samples", xlabel="Degree", ylabel="Frequency")
