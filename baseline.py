@@ -131,6 +131,10 @@ def plot_histogram(data, title="", xlabel="", ylabel=""):
 # Calculate node degrees for the baseline samples
 node_degrees_baseline = calc_node_degrees(baseline_samples)
 node_degrees_training = calc_node_degrees(train_dataset_nx)
-print(node_degrees_baseline)
 plot_histogram(node_degrees_baseline, title="Node Degrees in Baseline Samples", xlabel="Degree", ylabel="Frequency")
 plot_histogram(node_degrees_training, title="Node Degrees in Training Samples", xlabel="Degree", ylabel="Frequency")
+plot_histogram(calc_clustering(baseline_samples))
+plot_histogram(calc_clustering(train_dataset_nx))
+plot_histogram(calc_eigenvector_centrality(baseline_samples))
+plot_histogram(calc_eigenvector_centrality(train_dataset_nx))
+
