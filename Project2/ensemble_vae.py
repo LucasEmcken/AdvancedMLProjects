@@ -163,7 +163,7 @@ if __name__ == "__main__":
     )
 
     mnist_train_loader = torch.utils.data.DataLoader(
-        train_data, batch_size=args.batch_size, shuffle=True
+        train_data, batch_size=args.batch_size, shuffle=False
     )
     mnist_test_loader = torch.utils.data.DataLoader(
         test_data, batch_size=args.batch_size, shuffle=False
@@ -406,12 +406,14 @@ if __name__ == "__main__":
     elif args.mode == "geodesics":
         import numpy as np
         import json
-        model = VAE(
+        num_decoders= 4
+        num_model = 3
+        model = VAE_ensemble(
             GaussianPrior(M),
-            GaussianDecoder(new_decoder()),
-            GaussianEncoder(new_encoder()),
+            [GaussianDecoder(new_decoder(M=M)) for _ in range(num_decoders)],  # Create an ensemble of decoders
+            GaussianEncoder(new_encoder(M=M)),
         ).to(device)
-        model.load_state_dict(torch.load(args.experiment_folder + "/model.pt"))
+        model.load_state_dict(torch.load(args.experiment_folder + "/model_"+str(num_decoders)+"_"+str(num_model)+".pt"))
         model.eval()
         
         def select_random_point_pairs(num_points, n):
@@ -440,26 +442,15 @@ if __name__ == "__main__":
             return list(selected_pairs)
 
         def mean_func(z):
-            return model.decoder(z).mean.view(-1)  # Flatten output to (784,)
-
-        def compute_pull_back(z):
-            #Find Jacobian
-            J = torch.autograd.functional.jacobian(mean_func, z)
-            J = J.squeeze(1)  # Remove the batch dimension
-
-            #Compute Pull-back metric
-            return torch.matmul(J.T, J)
+            return model.decoders[0](z).mean.view(-1) 
         
         def compute_energy_simple(c):
             energy = 0.0
-            for s in range(1, c.shape[0]):
-                f_s = mean_func(c[s,:].unsqueeze(0))  # f(c_s)
-                f_s_minus_1 = mean_func(c[s - 1,:].unsqueeze(0))  # f(c_s-1)
-                
-                # Compute squared L2 norm
+            for s in range(0, c.shape[0]-1):
+                f_s = mean_func(c[s,:].unsqueeze(0)) 
+                f_s_minus_1 = mean_func(c[s + 1,:].unsqueeze(0))  
                 diff = f_s - f_s_minus_1
-                energy += torch.norm(diff) ** 2  # Squared L2 norm of the difference
-            
+                energy += torch.norm(diff) ** 2 
             return energy
 
         def compute_energy(c):
@@ -478,7 +469,7 @@ if __name__ == "__main__":
         point_list = []
         target = []
         images = []
-        for i in range(30):
+        for i in range(32):
             x, y = next(data_iter)
             images.append(x)
             x = x.to(device)
@@ -497,10 +488,10 @@ if __name__ == "__main__":
 
         #adds varaince background color
         if True:
-            x_min = min(x)-1
-            x_max = max(x)+1
-            y_min = min(y)-1
-            y_max = max(y)+1
+            x_min = min(x)-0.5
+            x_max = max(x)+0.5
+            y_min = min(y)-0.5
+            y_max = max(y)+0.5
             # Define step size (adjust for resolution)
             x_step = 0.05
             y_step = 0.05
@@ -514,7 +505,7 @@ if __name__ == "__main__":
             # Ensure we get the correct shape
             grid_shape = X.shape  # This should be (rows, cols
             grid_points = torch.tensor(np.stack((x_flat, y_flat), axis=0), dtype=torch.float32)
-            grid_points_var = model.decoder(grid_points.T).mean
+            grid_points_var = model.decoders[0](grid_points.T).mean
             flattened = grid_points_var.reshape(grid_points.shape[1], 1, 28 * 28)  # or variable.view(875, 1, 784)
             # Take mean across last dimension (875, 1, 784) -> (875, 1)
             mean_varaince = flattened.std(dim=-1)
@@ -562,7 +553,7 @@ if __name__ == "__main__":
             
             # Track energy over iterations
             energy_values = []
-            num_epoch = 500
+            num_epoch = 300
             
             # Example optimization loop
             optimizer = torch.optim.Adam([c_inner], lr=0.01)  # Optimizing the intermediate points `c_inner`
@@ -607,7 +598,7 @@ if __name__ == "__main__":
         plt.title('Optimized Geodesic Curve')
         plt.xlabel('Latent Dimension 1')
         plt.ylabel('Latent Dimension 2')
-        plt.savefig("Project2/plots/Geodesic_plot_simple.png")
+        plt.savefig("Project2/plots/Geodesic_plot_simple2.png")
         plt.show()
 
         # After optimization, plot the energy values
@@ -626,7 +617,7 @@ if __name__ == "__main__":
         import numpy as np
         import json
         num_decoders= 4
-        num_model = 2
+        num_model = 3
         model = VAE_ensemble(
             GaussianPrior(M),
             [GaussianDecoder(new_decoder(M=M)) for _ in range(num_decoders)],  # Create an ensemble of decoders
@@ -652,12 +643,34 @@ if __name__ == "__main__":
             
             return energy
         
+        def compute_energy_ensamble(model,c, num_dec):
+            energy = 0.0
+            decoder_list = [model.decoders[k] for k in range(num_dec)]
+            for s in range(0, c.shape[0]-1):
+                if len(decoder_list)==1:
+                    
+                    decoder_l=decoder_list[0]
+                    decoder_k=decoder_list[0]
+                else:
+                    decoder_l, decoder_k = random.sample(decoder_list, 2)               
+                
+                expectation = 0.0
+                for j in range(10):
+                    f_s = decoder_l(c[s,:].unsqueeze(0)).mean.view(-1)
+                    f_s_plus_1 = decoder_k(c[s+1,:].unsqueeze(0)).mean.view(-1)
+                    diff = f_s - f_s_plus_1
+                    expectation += torch.norm(diff) ** 2
+                    
+                energy += expectation/10 
+                    
+            return energy
+        
         #________Extract points____________
         data_iter = iter(mnist_train_loader)
         point_list = []
         target = []
         images = []
-        for i in range(30):
+        for i in range(32):
             x, y = next(data_iter)
             images.append(x)
             x = x.to(device)
@@ -737,7 +750,7 @@ if __name__ == "__main__":
             
             # Track energy over iterations
             energy_values = []
-            num_epoch = 500
+            num_epoch = 100
             
             # Example optimization loop
             optimizer = torch.optim.Adam([c_inner], lr=0.01)  # Optimizing the intermediate points `c_inner`
@@ -745,7 +758,7 @@ if __name__ == "__main__":
             # Wrap the epoch loop with tqdm for progress tracking
             for epoch in range(num_epoch):
                 optimizer.zero_grad()  # Zero the gradients
-                energy = compute_energy_ensamble(model, c_inner)  # Compute the current energy
+                energy = compute_energy(model, c_inner, num_decoders)  # Compute the current energy
                 energy_values.append(energy.item())  # Store the energy value for this iteration
 
                 energy.backward()  # Compute gradients
@@ -782,7 +795,7 @@ if __name__ == "__main__":
         plt.title('Optimized Geodesic 4-decoder Model')
         plt.xlabel('Latent Dimension 1')
         plt.ylabel('Latent Dimension 2')
-        plt.savefig("Project2/plots/Geodesic_plot_ensamble.png")
+        plt.savefig("Project2/plots/Geodesic_plot_ensamble2.png")
         plt.show()
 
         # After optimization, plot the energy values
