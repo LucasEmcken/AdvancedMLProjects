@@ -141,7 +141,8 @@ def train_vae(model, train_dataset, epochs=100, batch_size=32, lr=0.001):
     return model
 
 if __name__ == "__main__":
-    from baseline import train_dataset
+    from baseline import train_dataset, baseline_samples
+    import matplotlib.pyplot as plt
     
     # Determine maximum number of nodes in the dataset
     max_num_nodes = max([data.num_nodes for data in train_dataset])
@@ -151,14 +152,20 @@ if __name__ == "__main__":
     
     # Initialize and train VAE
     vae = GraphVAE(max_num_nodes=max_num_nodes, node_feature_dim=node_feature_dim)
-    vae = train_vae(vae, train_dataset, epochs=50)
+    vae = train_vae(vae, train_dataset, epochs=150)
 
     # Generate samples
-    generated_graphs = vae.sample(num_samples=100)
+    generated_graphs = vae.sample(num_samples=150)
+    
+    #TODO: Remove nodes with 0 edges
+    isolated_graphs = []
+    
+    for i in generated_graphs:
+        i.remove_nodes_from(list(nx.isolates(i)))
     
     # Evaluate samples using the same metrics as baseline
-    from baseline import calc_novel_and_uniques_samples, calc_node_degrees, calc_clustering, calc_eigenvector_centrality, plot_histogram
-    
+    # from baseline import calc_novel_and_uniques_samples, calc_node_degrees, calc_clustering, calc_eigenvector_centrality, plot_histogram
+    import create_graph_statistics as gs
     # train_dataset_nx = [to_networkx(data, to_undirected=True) for data in train_dataset]
     
     # print(generated_graphs)
@@ -166,17 +173,27 @@ if __name__ == "__main__":
     # exit()
 
     print("\nEvaluating VAE-generated samples:")
-    calc_novel_and_uniques_samples(train_dataset, generated_graphs)
+    # gs.calc_novel_and_uniques_samples(train_dataset, generated_graphs)
+    gs.create_histogram_grid(gs.convert_to_nx(train_dataset),
+                             baseline_samples,
+                             generated_graphs)
 
-    # Compare distributions
-    print("\nNode degree distributions:")
-    node_degrees_vae = calc_node_degrees(generated_graphs)
-    node_degrees_train = calc_node_degrees(to_networkx(train_dataset_nx))
-    plot_histogram(node_degrees_vae, title="VAE Generated - Node Degrees", xlabel="Degree", ylabel="Frequency")
-    plot_histogram(node_degrees_train, title="Training Data - Node Degrees", xlabel="Degree", ylabel="Frequency")
+
+    plots = 3
+    for i in range((min(plots, len(generated_graphs)))):
+        nx.draw(generated_graphs[i], cmap = plt.get_cmap('jet'))
+        plt.savefig(f"graph_{i}.png")
+        plt.close()
+
+    # # Compare distributions
+    # print("\nNode degree distributions:")
+    # node_degrees_vae = gs.calc_node_degrees(generated_graphs)
+    # node_degrees_train = gs.calc_node_degrees(to_networkx(train_dataset_nx))
+    # gs.plot_histogram(node_degrees_vae, title="VAE Generated - Node Degrees", xlabel="Degree", ylabel="Frequency")
+    # gs.plot_histogram(node_degrees_train, title="Training Data - Node Degrees", xlabel="Degree", ylabel="Frequency")
     
-    print("\nClustering coefficient distributions:")
-    clustering_vae = calc_clustering(generated_graphs)
-    clustering_train = calc_clustering(to_networkx(train_dataset_nx))
-    plot_histogram(clustering_vae, title="VAE Generated - Clustering", xlabel="Coefficient", ylabel="Frequency")
-    plot_histogram(clustering_train, title="Training Data - Clustering", xlabel="Coefficient", ylabel="Frequency")
+    # print("\nClustering coefficient distributions:")
+    # clustering_vae = calc_clustering(generated_graphs)
+    # clustering_train = calc_clustering(to_networkx(train_dataset_nx))
+    # plot_histogram(clustering_vae, title="VAE Generated - Clustering", xlabel="Coefficient", ylabel="Frequency")
+    # plot_histogram(clustering_train, title="Training Data - Clustering", xlabel="Coefficient", ylabel="Frequency")
