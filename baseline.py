@@ -84,3 +84,32 @@ baseline_samples = baseline(train_dataset).sample_batch(100000)
 
 # %%
 calc_novel_and_uniques_samples(train_dataset_nx, baseline_samples)
+
+
+# %%
+def calc_node_degrees(graphs):
+    """Calculate the node degrees for a batch of graphs."""
+    node_degrees = []
+    for graph in graphs:
+        # Calculate the degree for each node in the graph
+        degrees = dict(graph.degree())
+        node_degrees.append(degrees)
+    return node_degrees
+
+def calc_clustering(graphs):
+    """Calculate the clustering coefficient for a batch of graphs."""
+    clustering_coeffs = []
+    for graph in graphs:
+        # Calculate the clustering coefficient for each graph
+        clustering_coeff = nx.clustering(graph)
+        clustering_coeffs.append(clustering_coeff)
+    return clustering_coeffs
+
+def calc_eigenvector_centrality(graphs):
+    """Calculate the eigenvector centrality for a batch of graphs."""
+    eigenvector_centralities = []
+    for graph in graphs:
+        # Calculate the eigenvector centrality for each graph
+        eigenvector_centrality = nx.eigenvector_centrality(graph)
+        eigenvector_centralities.append(eigenvector_centrality)
+    return eigenvector_centralities
