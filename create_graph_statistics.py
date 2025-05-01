@@ -14,7 +14,7 @@ device = 'cpu'
 dataset = TUDataset(root='./data/', name='MUTAG').to(device)
 
 rng = torch.Generator().manual_seed(0)
-train_dataset, validation_dataset, test_dataset = random_split(dataset, (100, 44, 44), generator=rng)
+train_dataset, validation_dataset, test_dataset = random_split(dataset, (188, 0, 0), generator=rng)
 
 def convert_to_nx(data):
     """Convert a PyTorch Geometric data object to a NetworkX graph."""
@@ -29,16 +29,17 @@ def calc_node_degrees(graphs):
     node_degrees = []
     for graph in graphs:
         degrees = [deg for node, deg in graph.degree()]
-        node_degrees += degrees
+        node_degrees += [np.mean(degrees)]
         
     return node_degrees
 
 def calc_clustering(graphs):
     """Calculate the clustering coefficient for a batch of graphs."""
+    
     clustering_coeffs = []
     for graph in graphs:
-        clustering = list(nx.clustering(graph).values())
-        clustering_coeffs += clustering
+        clustering = nx.average_clustering(graph)
+        clustering_coeffs.append(clustering)
         
     return clustering_coeffs
 
@@ -49,7 +50,7 @@ def calc_eigenvector_centrality(graphs):
         try:
             eigenvector_centrality = nx.eigenvector_centrality(graph, max_iter=1000, tol=1e-06)
             eigenvector_values = list(eigenvector_centrality.values())
-            eigenvector_centralities += eigenvector_values
+            eigenvector_centralities += [np.mean(eigenvector_values)]
         except nx.PowerIterationFailedConvergence:
             print("Warning: Power iteration failed to converge on a graph. Skipping.")
             continue  # or append NaNs/zeros depending on your use case
@@ -83,20 +84,19 @@ def create_histogram(nd_data, cc_data, ec_data,
     fig.suptitle('Graph Statistics', fontsize=16)
 
     # Row 1: Node Degrees
-    axes[0, 0].hist(nd_data, color='blue', edgecolor='black', align='left')
-    axes[0, 1].hist(nd_base, color='green', edgecolor='black', align='left')
-    axes[0, 2].hist(nd_gen, color='red', edgecolor='black', align='left')
+    axes[0, 0].hist(nd_data, color='blue', edgecolor='black')
+    axes[0, 1].hist(nd_base, color='green', edgecolor='black')
+    axes[0, 2].hist(nd_gen, color='red', edgecolor='black')
 
     # Row 2: Clustering Coefficients
-    axes[1, 0].hist(cc_data, bins=bins_cc, color='blue', edgecolor='black', align='mid')
-    axes[1, 1].hist(cc_base, bins=bins_cc, color='green', edgecolor='black', align='mid')
-    axes[1, 2].hist(cc_gen, bins=bins_cc, color='red', edgecolor='black', align='mid')
+    axes[1, 0].hist(cc_data, color='blue', edgecolor='black')
+    axes[1, 1].hist(cc_base, color='green', edgecolor='black')
+    axes[1, 2].hist(cc_gen, color='red', edgecolor='black')
     
-
     # Row 3: Eigenvector Centrality
-    axes[2, 0].hist(ec_data, bins=bins_ec, color='blue', edgecolor='black', align='mid')
-    axes[2, 1].hist(ec_base, bins=bins_ec, color='green', edgecolor='black', align='mid')
-    axes[2, 2].hist(ec_gen, bins=bins_ec, color='red', edgecolor='black', align='mid')
+    axes[2, 0].hist(ec_data, color='blue', edgecolor='black')
+    axes[2, 1].hist(ec_base, color='green', edgecolor='black')
+    axes[2, 2].hist(ec_gen, color='red', edgecolor='black')
 
 
     #Set titles on histograms
@@ -109,29 +109,23 @@ def create_histogram(nd_data, cc_data, ec_data,
     axes[2, 0].set_ylabel('Eigenvector centrality')
 
     plt.tight_layout()
-    plt.show()
+    plt.savefig("Graph_Statistics.png")
 
 
 def create_histogram_grid(data, base, gen):
     #___________ Training data _______________
     nd_data = calc_node_degrees(data)
-    
     cc_data = calc_clustering(data)
-    
     ec_data = calc_eigenvector_centrality(data)
     
     #___________ Training data _______________
     nd_base = calc_node_degrees(base)
-    
     cc_base = calc_clustering(base)
-    
     ec_base = calc_eigenvector_centrality(base)
 
     #___________ Training data _______________
     nd_gen = calc_node_degrees(gen)
-    
     cc_gen = calc_clustering(gen)
-    
     ec_gen = calc_eigenvector_centrality(gen)
 
 
