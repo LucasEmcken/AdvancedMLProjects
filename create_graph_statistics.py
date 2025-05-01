@@ -83,20 +83,37 @@ def create_histogram(nd_data, cc_data, ec_data,
     fig, axes = plt.subplots(3, 3, figsize=(10, 8))
     fig.suptitle('Graph Statistics', fontsize=16)
 
-    # Row 1: Node Degrees
-    axes[0, 0].hist(nd_data, color='blue', edgecolor='black')
-    axes[0, 1].hist(nd_base, color='green', edgecolor='black')
-    axes[0, 2].hist(nd_gen, color='red', edgecolor='black')
 
-    # Row 2: Clustering Coefficients
-    axes[1, 0].hist(cc_data, color='blue', edgecolor='black')
-    axes[1, 1].hist(cc_base, color='green', edgecolor='black')
-    axes[1, 2].hist(cc_gen, color='red', edgecolor='black')
+    # Combine all node degree data
+    all_nd = nd_data + nd_base + nd_gen
+
+    # Define shared bins (you can change the number of bins)
+    num_bins = 20
+    min_val, max_val = min(all_nd), max(all_nd)
+    bins_nd = np.linspace(min_val, max_val, num_bins + 1)
+
+    # Row 1: Node Degrees
+    axes[0, 0].hist(nd_data, bins=bins_nd, color='blue', edgecolor='black')
+    axes[0, 1].hist(nd_base, bins=bins_nd, color='green', edgecolor='black')
+    axes[0, 2].hist(nd_gen, bins=bins_nd, color='red', edgecolor='black')
+
+    all_cc = cc_data + cc_base + cc_gen
+    num_bins_cc = 20
+    min_cc, max_cc = min(all_cc), max(all_cc)
+    bins_cc = np.linspace(min_cc, max_cc, num_bins_cc + 1)
+
+    axes[1, 0].hist(cc_data, bins=bins_cc, color='blue', edgecolor='black')
+    axes[1, 1].hist(cc_base, bins=bins_cc, color='green', edgecolor='black')
+    axes[1, 2].hist(cc_gen, bins=bins_cc, color='red', edgecolor='black')
     
-    # Row 3: Eigenvector Centrality
-    axes[2, 0].hist(ec_data, color='blue', edgecolor='black')
-    axes[2, 1].hist(ec_base, color='green', edgecolor='black')
-    axes[2, 2].hist(ec_gen, color='red', edgecolor='black')
+    all_ec = ec_data + ec_base + ec_gen
+    num_bins_ec = 20
+    min_ec, max_ec = min(all_ec), max(all_ec)
+    bins_ec = np.linspace(min_ec, max_ec, num_bins_ec + 1)
+
+    axes[2, 0].hist(ec_data, bins=bins_ec, color='blue', edgecolor='black')
+    axes[2, 1].hist(ec_base, bins=bins_ec, color='green', edgecolor='black')
+    axes[2, 2].hist(ec_gen, bins=bins_ec, color='red', edgecolor='black')
 
 
     #Set titles on histograms
