@@ -82,8 +82,16 @@ def calc_novel_and_uniques_samples(train_dataset, baseline_samples):
 train_dataset_nx = convert_to_nx(train_dataset)
 baseline_samples = baseline(train_dataset).sample_batch(100000)
 
+print("Printing: ")
+print(type(baseline_samples))
+print(type(baseline_samples[0]))
+
+print(type(train_dataset_nx))
+print(type(train_dataset_nx[0]))
+
+
 # %%
-calc_novel_and_uniques_samples(train_dataset_nx, baseline_samples)
+calc_novel_and_uniques_samples(train_dataset, baseline_samples)
 
 
 # %%
