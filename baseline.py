@@ -59,16 +59,28 @@ class baseline:
         for i in range(batch_size):
             samples.append(self.sample())
         return samples
+# %%
+def calc_novel_and_uniques_samples(train_dataset, baseline_samples):
+    """Calculate the number of novel and unique samples."""
+    train_dataset_hash = batch_hash(convert_to_nx(train_dataset))
+    baseline_samples_hash = batch_hash(baseline_samples)
+    unique = len(set(baseline_samples_hash))/len(baseline_samples_hash)
+    novel = len([i for i in baseline_samples_hash if i not in train_dataset_hash])/len(baseline_samples_hash)
+    novel_and_unique = len(set(baseline_samples_hash) - set(train_dataset_hash))/len(baseline_samples_hash)
+    print("Percentage of unique samples:")
+    print(unique)
+    print("Percentage of novel samples:")
+    print(novel)
+    print("Percentage of novel and unique samples:")
+    print(novel_and_unique)
+    return unique, novel, novel_and_unique
+
+
 
 # %%
 
-train_dataset_hash = batch_hash(convert_to_nx(train_dataset))
-baseline_samples_hash = batch_hash(baseline(train_dataset).sample_batch(100000))
+train_dataset_nx = convert_to_nx(train_dataset)
+baseline_samples = baseline(train_dataset).sample_batch(100000)
 
 # %%
-print(len(set(baseline_samples_hash))/len(baseline_samples_hash))
-print("Percentage of novel samples:")
-print(len([i for i in baseline_samples_hash if i not in train_dataset_hash])/len(baseline_samples_hash))
-print("Percentage of novel and unique samples:")
-print(len(set(baseline_samples_hash) - set(train_dataset_hash))/len(baseline_samples_hash))
-
+calc_novel_and_uniques_samples(train_dataset_nx, baseline_samples)
