@@ -75,11 +75,7 @@ def create_histogram(nd_data, cc_data, ec_data,
     bins_cc = max_unique_count(cc_data, cc_base, cc_gen)
     #bins_ec = max_unique_count(ec_data, ec_base, ec_gen)
     bins_ec = 30
-    print(bins_nd)
-    print(bins_cc)
-    print(bins_ec)
-    
-    
+  
     fig, axes = plt.subplots(3, 3, figsize=(10, 8))
     fig.suptitle('Graph Statistics', fontsize=16)
 
@@ -154,6 +150,6 @@ def create_histogram_grid(data, base, gen):
 
 
 
-create_histogram_grid(train_dataset_nx,train_dataset_nx,train_dataset_nx)
+#create_histogram_grid(train_dataset_nx,train_dataset_nx,train_dataset_nx)
 
 

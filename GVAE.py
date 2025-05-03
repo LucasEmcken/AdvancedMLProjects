@@ -6,6 +6,10 @@ from torch_geometric.data import Data
 import networkx as nx
 from torch.distributions import Normal
 from torch_geometric.utils.convert import to_networkx
+from tqdm import tqdm
+import os
+
+os.system('cls' if os.name == 'nt' else 'clear')
 
 class GraphVAE(nn.Module):
     def __init__(self, max_num_nodes, node_feature_dim=7, latent_dim=16):
@@ -112,7 +116,8 @@ def train_vae(model, train_dataset, epochs=100, batch_size=32, lr=0.001):
     dataset = torch.utils.data.TensorDataset(adj_matrices)
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
     
-    for epoch in range(epochs):
+    pbar = tqdm(range(epochs), desc="Training")
+    for epoch in pbar:
         total_loss = 0
         for batch in loader:
             adj = batch[0]
@@ -136,28 +141,113 @@ def train_vae(model, train_dataset, epochs=100, batch_size=32, lr=0.001):
             
             total_loss += loss.item()
         
-        print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(train_dataset)}")
-    
-    return model
+        avg_loss = total_loss / len(train_dataset)
+        pbar.set_postfix(loss=f"{avg_loss:.4f}")
+
+    return model, avg_loss
 
 if __name__ == "__main__":
-    from baseline import train_dataset, baseline_samples
+    from baseline import baseline, calc_novel_and_uniques_samples
     import matplotlib.pyplot as plt
-    
+    import torch
+    from torch.utils.data import random_split
+    from torch_geometric.datasets import TUDataset
+    from torch_geometric.loader import DataLoader
+    from torch_geometric.utils.convert import to_networkx
+    import matplotlib.pyplot as plt
+    import networkx as nx
+    from networkx import weisfeiler_lehman_graph_hash
+    import random
+    import create_graph_statistics as gs
+    import numpy as np
+    import itertools
+
+
+    device = 'cpu'
+    dataset = TUDataset(root='./data/', name='MUTAG').to(device)
+    rng = torch.Generator().manual_seed(0)
+    train_dataset, validation_dataset, test_dataset = random_split(dataset, (100, 44, 44), generator=rng)
+
     # Determine maximum number of nodes in the dataset
     max_num_nodes = max([data.num_nodes for data in train_dataset])
     node_feature_dim = train_dataset[0].x.shape[1] if hasattr(train_dataset[0], 'x') else 1
     
     print(f"Training VAE with max_num_nodes={max_num_nodes}, node_feature_dim={node_feature_dim}")
     
-    # Initialize and train VAE
-    vae = GraphVAE(max_num_nodes=max_num_nodes, node_feature_dim=node_feature_dim)
-    vae = train_vae(vae, train_dataset, epochs=150)
-
-    # Generate samples
-    generated_graphs = vae.sample(num_samples=150)
     
-    #TODO: Remove nodes with 0 edges
+    epochs=300
+    lr = 0.005
+    batch_size = 16
+    lat_dim = 8
+
+    # Initialize and train VAE
+    vae = GraphVAE(max_num_nodes=max_num_nodes, node_feature_dim=node_feature_dim, latent_dim=lat_dim)
+
+    vae, _ = train_vae(vae, train_dataset, epochs=epochs, batch_size=batch_size, lr=lr)
+    """
+
+    # Define search space
+    param_grid = {
+        'epochs': [100, 200, 300],
+        'lr': [0.005, 0.001, 0.0005],
+        'batch_size': [16, 32, 64],
+        'latent_dim': [8, 16, 32],
+    }
+
+    # Generate all combinations
+    all_combinations = list(itertools.product(
+        param_grid['epochs'],
+        param_grid['lr'],
+        param_grid['batch_size'],
+        param_grid['latent_dim']
+    ))
+
+    results = []
+
+    for i, (epochs, lr, batch_size, lat_dim) in enumerate(all_combinations):
+        print(f"\nTrial {i+1}/{len(all_combinations)} - epochs={epochs}, lr={lr}, batch_size={batch_size}, latent_dim={lat_dim}")
+        
+        # Initialize model
+        vae = GraphVAE(
+            max_num_nodes=max_num_nodes,
+            node_feature_dim=node_feature_dim,
+            latent_dim=lat_dim
+        )
+        
+        # Train and get loss
+        vae, avg_loss = train_vae(vae, train_dataset, epochs=epochs, batch_size=batch_size, lr=lr)
+        
+        # Log results
+        results.append({
+            'trial': i+1,
+            'epochs': epochs,
+            'lr': lr,
+            'batch_size': batch_size,
+            'latent_dim': lat_dim,
+            'avg_loss': avg_loss
+        })
+
+    # Find and print best configuration
+    best = min(results, key=lambda x: x['avg_loss'])
+    print("\nBest configuration:")
+    for key, value in best.items():
+        print(f"{key}: {value}")
+    """
+    # Generate samples
+    generated_graphs = vae.sample(num_samples=1000)
+    baseline_samples = baseline(train_dataset).sample_batch(1000)
+
+    print("________Number of Sampled graphs:______________ ")
+    print("Baseline: ", len(baseline_samples))
+    print("VAE     : ", len(generated_graphs))
+
+
+    print("________Compute Novel and Unique:______________ ")
+    print("\n Baseline:")
+    calc_novel_and_uniques_samples(train_dataset, baseline_samples)
+    print("\n VAE:")
+    calc_novel_and_uniques_samples(train_dataset, generated_graphs)
+
     isolated_graphs = []
     
     for i in generated_graphs:
@@ -166,34 +256,12 @@ if __name__ == "__main__":
     # Evaluate samples using the same metrics as baseline
     # from baseline import calc_novel_and_uniques_samples, calc_node_degrees, calc_clustering, calc_eigenvector_centrality, plot_histogram
     import create_graph_statistics as gs
-    # train_dataset_nx = [to_networkx(data, to_undirected=True) for data in train_dataset]
-    
-    # print(generated_graphs)
-    # print(train_dataset_nx)
-    # exit()
-
-    print("\nEvaluating VAE-generated samples:")
     # gs.calc_novel_and_uniques_samples(train_dataset, generated_graphs)
+    print("________Creating Statistics Graph______________ ")
+
     gs.create_histogram_grid(gs.convert_to_nx(train_dataset),
                              baseline_samples,
                              generated_graphs)
 
-
-    plots = 3
-    for i in range((min(plots, len(generated_graphs)))):
-        nx.draw(generated_graphs[i], cmap = plt.get_cmap('jet'))
-        plt.savefig(f"graph_{i}.png")
-        plt.close()
-
-    # # Compare distributions
-    # print("\nNode degree distributions:")
-    # node_degrees_vae = gs.calc_node_degrees(generated_graphs)
-    # node_degrees_train = gs.calc_node_degrees(to_networkx(train_dataset_nx))
-    # gs.plot_histogram(node_degrees_vae, title="VAE Generated - Node Degrees", xlabel="Degree", ylabel="Frequency")
-    # gs.plot_histogram(node_degrees_train, title="Training Data - Node Degrees", xlabel="Degree", ylabel="Frequency")
+    print("________Done______________ ")
     
-    # print("\nClustering coefficient distributions:")
-    # clustering_vae = calc_clustering(generated_graphs)
-    # clustering_train = calc_clustering(to_networkx(train_dataset_nx))
-    # plot_histogram(clustering_vae, title="VAE Generated - Clustering", xlabel="Coefficient", ylabel="Frequency")
-    # plot_histogram(clustering_train, title="Training Data - Clustering", xlabel="Coefficient", ylabel="Frequency")

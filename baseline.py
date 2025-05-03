@@ -15,9 +15,6 @@ device = 'cpu'
 # %% Load the MUTAG dataset
 # Load data
 dataset = TUDataset(root='./data/', name='MUTAG').to(device)
-print(dataset)
-print(type(dataset[2]))
-print(to_networkx(dataset[2],to_undirected=True))
 
 # %% 
 # Split into training and validation
@@ -108,33 +105,22 @@ def calc_novel_and_uniques_samples(train_dataset, baseline_samples):
     unique = len(set(baseline_samples_hash))/len(baseline_samples_hash)
     novel = len([i for i in baseline_samples_hash if i not in train_dataset_hash])/len(baseline_samples_hash)
     novel_and_unique = len(set(baseline_samples_hash) - set(train_dataset_hash))/len(baseline_samples_hash)
-    print("Percentage of unique samples:")
-    print(unique)
-    print("Percentage of novel samples:")
-    print(novel)
-    print("Percentage of novel and unique samples:")
-    print(novel_and_unique)
+    print("Unique samples          :", unique)
+    print("Novel samples           :", novel)
+    print("Novel and unique samples:", novel_and_unique)
     return unique, novel, novel_and_unique
 
 
 
 # %%
 
-train_dataset_nx = convert_to_nx(train_dataset)
-baseline_samples = baseline(train_dataset).sample_batch(100000)
-
-print("Printing: ")
-print(type(baseline_samples))
-print(type(baseline_samples[0]))
-
-print(type(train_dataset_nx))
-print(type(train_dataset_nx[0]))
-
+# train_dataset_nx = convert_to_nx(train_dataset)
+# baseline_samples = baseline(train_dataset).sample_batch(100000)
 
 # %%
-calc_novel_and_uniques_samples(train_dataset, baseline_samples)
+# calc_novel_and_uniques_samples(train_dataset, baseline_samples)
 
 ########## replace input with (train_dataset_nx, baseline_nx, vae_nx) #################
-gs.create_histogram_grid(train_dataset_nx,baseline_samples,train_dataset_nx)
+# gs.create_histogram_grid(train_dataset_nx,baseline_samples,train_dataset_nx)
 
 
