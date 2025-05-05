@@ -251,7 +251,9 @@ if __name__ == "__main__":
     isolated_graphs = []
     
     for i in generated_graphs:
-        i.remove_nodes_from(list(nx.isolates(i)))
+        largest_cc = max(nx.connected_components(i), key=len)
+        i = i.subgraph(largest_cc)
+        #i.remove_nodes_from(list(nx.isolates(i)))
     
     # Evaluate samples using the same metrics as baseline
     # from baseline import calc_novel_and_uniques_samples, calc_node_degrees, calc_clustering, calc_eigenvector_centrality, plot_histogram
