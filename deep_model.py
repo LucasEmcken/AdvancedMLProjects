@@ -65,7 +65,7 @@ class GaussianEncoder(nn.Module):
         return [td.Independent(td.Normal(loc=mean[i], scale=torch.exp(std[i])), 1) for i in range(x.x.shape[0])]
 
 
-class GaussianDecoder(nn.Module):
+class BinomDecoder(nn.Module):
     def __init__(self, decoder_net):
         """
         Define a Bernoulli decoder distribution based on a given decoder network.
@@ -76,9 +76,12 @@ class GaussianDecoder(nn.Module):
            input, where M is the dimension of the latent space, and outputs a
            tensor of dimension (batch_size, feature_dim1, feature_dim2).
         """
-        super(GaussianDecoder, self).__init__()
+        super(BinomDecoder, self).__init__()
         self.decoder_net = decoder_net
         # self.std = nn.Parameter(torch.ones(28, 28) * 0.5, requires_grad=True) # In case you want to learn the std of the gaussian.
+
+    def probability(self, z):
+        return self.decoder_net(z)
 
     def forward(self, z):
         """
@@ -88,15 +91,15 @@ class GaussianDecoder(nn.Module):
         z: [torch.Tensor]
            A tensor of dimension `(batch_size, M)`, where M is the dimension of the latent space.
         """
-        means = self.decoder_net(z)
-        return td.Independent(td.Normal(loc=means, scale=1e-1), 3)
+        self.prob = self.decoder_net(z)
+        return td.Independent(td.Bernoulli(probs=self.prob), 1)
 
 class GNN_VAE(nn.Module):
     """
     Define a Variational Autoencoder (VAE) model.
     """
 
-    def __init__(self, prior, decoder, encoder_mu, encoder_sigma):
+    def __init__(self, prior, decoder, encoder_mu, encoder_sigma, train_dataset=None):
         """
         Parameters:
         prior: [torch.nn.Module]
@@ -108,6 +111,7 @@ class GNN_VAE(nn.Module):
         """
 
         super(GNN_VAE, self).__init__()
+        self.train_dataset = train_dataset
         self.prior = prior
         self.decoder = decoder
         self.encoder_mu = encoder_mu
@@ -115,18 +119,7 @@ class GNN_VAE(nn.Module):
         self.encoder = GaussianEncoder(encoder_mu, encoder_sigma)
         self.loss = BCELoss()
 
-    def elbo(self, x):
-        """
-        Compute the ELBO for the given batch of data.
-
-        Parameters:
-        x: [torch.Tensor]
-           A tensor of dimension `(batch_size, feature_dim1, feature_dim2, ...)`
-           n_samples: [int]
-           Number of samples to use for the Monte Carlo estimate of the ELBO.
-        """
-        #print(x.x.shape)
-        
+    def forward(self, x): 
         
         nodes = [i for i in range(x.x.shape[0])]
         pairs = combinations(nodes, 2)
@@ -138,10 +131,12 @@ class GNN_VAE(nn.Module):
  
         loss = 0
         for pair in pairs:
-            prob = self.decoder(torch.dot(z_latents[pair[0]], z_latents[pair[1]]).unsqueeze(0))
+            prob = self.decoder.probability(torch.dot(z_latents[pair[0]], z_latents[pair[1]]).unsqueeze(0))
             loss += self.loss(prob, torch.tensor(1 if (pair in x.edge_index.T.tolist() or pair[::-1] in x.edge_index.T.tolist()) else 0,
                                                  dtype=torch.float32).unsqueeze(0))
-        return loss
+        kl_loss = sum([td.kl_divergence(q_latents[i], self.prior()) for i in range(len(q_latents))])
+        total_loss = loss + kl_loss * 0.001
+        return total_loss
 
     def sample(self, n_samples=1):
         """
@@ -151,18 +146,32 @@ class GNN_VAE(nn.Module):
         n_samples: [int]
            Number of samples to generate.
         """
-        z = self.prior().sample(torch.Size([n_samples]))
-        return self.decoder(z).sample()
-
-    def forward(self, x):
+        samples = []
+        for _ in range(n_samples):
+            samples.append(self.single_sample())
+        return samples
+    
+    def single_sample(self):
         """
-        Compute the negative ELBO for the given batch of data.
+        Sample from the model.
 
         Parameters:
-        x: [torch.Tensor]
-           A tensor of dimension `(batch_size, feature_dim1, feature_dim2)`
+        n_samples: [int]
+           Number of samples to generate.
         """
-        return self.elbo(x)
+        N = self.train_dataset[random.randint(0, len(self.train_dataset))-1].num_nodes
+        adjacency_matrix = torch.zeros((N, N))
+        node_embeddings = [self.prior().sample() for _ in range(N)]
+        node_pairs = combinations(range(N), 2)
+        for pair in node_pairs:
+            connection = self.decoder(torch.dot(node_embeddings[pair[0]], node_embeddings[pair[1]]).unsqueeze(0)).sample()
+            adjacency_matrix[pair[0], pair[1]] = connection
+            adjacency_matrix[pair[1], pair[0]] = connection
+        # Convert the adjacency matrix to a graph
+        G = nx.from_numpy_array(adjacency_matrix.numpy())
+        return G
+
+
 
 class SimpleGNN(torch.nn.Module):
     """Simple graph neural network for graph classification
@@ -205,6 +214,7 @@ class SimpleGNN(torch.nn.Module):
 
     def forward(self, x):
         edge_index = x.edge_index
+        #print(x)
         x = x.x
         """Evaluate neural network on a batch of graphs.
 
@@ -251,28 +261,72 @@ class SimpleGNN(torch.nn.Module):
 
         return graph_state
     
+from baseline import baseline
+from baseline import baseline, calc_novel_and_uniques_samples
+
+import networkx as nx
+from torch_geometric.utils import to_networkx
+from tqdm import tqdm
+
+def preprocess_with_structural_features(dataset):
+    """
+    Add structural features (degree, clustering coefficient, etc.) to each node.
+
+    Parameters:
+    dataset: torch_geometric.data.Dataset
+        The input graph dataset.
+
+    Returns:
+    dataset: torch_geometric.data.Dataset
+        The modified dataset with structural features.
+    """
+    processed_data_list = []
+    for data in tqdm(dataset):
+        G = to_networkx(data, to_undirected=True)
+        
+        # Compute structural features
+        degree = dict(G.degree())
+        clustering = nx.clustering(G)
+        betweenness = nx.eigenvector_centrality(G, max_iter=1000, tol=1e-06)
+        
+        # Create feature matrix
+        features = []
+        for node in G.nodes():
+            features.append([
+                degree[node],
+                clustering[node],
+                betweenness[node]
+            ])
+        
+        # Replace node features with structural features
+        data.x = torch.tensor(features, dtype=torch.float32)
+        processed_data_list.append(data)
+    
+    # Return the updated dataset
+    return processed_data_list
 
 if __name__ == "__main__":
-    GNN_mu = SimpleGNN(node_feature_dim=7, state_dim=16, num_message_passing_rounds=3, out_dim=16)
-    GNN_sigma = SimpleGNN(node_feature_dim=7, state_dim=16, num_message_passing_rounds=3, out_dim=16)
+    GNN_mu = SimpleGNN(node_feature_dim=3, state_dim=16, num_message_passing_rounds=3, out_dim=16)
+    GNN_sigma = SimpleGNN(node_feature_dim=3, state_dim=16, num_message_passing_rounds=3, out_dim=16)
     prior = GaussianPrior(M=16)
     decoder_net = nn.Sequential(
         nn.Linear(1, 1),
         nn.Sigmoid()
     )
-    decoder = GaussianDecoder(decoder_net=decoder_net)
+    decoder = BinomDecoder(decoder_net=decoder_net)
 
     device = "cpu"
     dataset = TUDataset(root='./data/', name='MUTAG').to(device)
     rng = torch.Generator().manual_seed(0)
     train_dataset, validation_dataset, test_dataset = random_split(dataset, (100, 44, 44), generator=rng)
 
+    train_dataset = preprocess_with_structural_features(train_dataset)
 
-    model = GNN_VAE(prior=prior, decoder=decoder_net, encoder_mu=GNN_mu, encoder_sigma=GNN_sigma)
+    model = GNN_VAE(prior=prior, decoder=decoder, encoder_mu=GNN_mu, encoder_sigma=GNN_sigma, train_dataset=train_dataset)
 
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    for epoch in range(5):
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    for epoch in range(3):
         for x in train_dataset:
             x = x.to(device)
             optimizer.zero_grad()
@@ -280,4 +334,28 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
             print(loss.item())
+    baseline_samples = baseline(train_dataset).sample_batch(1000)
+    generated_graphs = model.sample(n_samples=1000)
+    for i, graph in enumerate(generated_graphs):
+        largest_cc = max(nx.connected_components(graph), key=len)
+        generated_graphs[i] = graph.subgraph(largest_cc)
+        #i.remove_nodes_from(list(nx.isolates(i)))
+    print("________Number of Sampled graphs:______________ ")
+    print("Baseline: ", len(baseline_samples))
+    print("VAE     : ", len(generated_graphs))
 
+
+    print("________Compute Novel and Unique:______________ ")
+    print("\n Baseline:")
+    calc_novel_and_uniques_samples(train_dataset, baseline_samples)
+    print("\n Node level VAE:")
+    calc_novel_and_uniques_samples(train_dataset, generated_graphs)
+    import create_graph_statistics as gs
+    # gs.calc_novel_and_uniques_samples(train_dataset, generated_graphs)
+    print("________Creating Statistics Graph______________ ")
+
+    gs.create_histogram_grid(gs.convert_to_nx(train_dataset),
+                             baseline_samples,
+                             generated_graphs)
+
+    print("________Done______________ ")
